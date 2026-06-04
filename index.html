@@ -192,11 +192,6 @@
       <div class="spacer"></div>
 
       <div class="toggle-group">
-        <button id="btnAbs"  class="active" onclick="setUnit('abs')">Million bbl</button>
-        <button id="btnDays"               onclick="setUnit('days')">Days of supply</button>
-      </div>
-
-      <div class="toggle-group">
         <button id="btnSeasonal" class="active" onclick="setMode('seasonal')">Seasonal</button>
         <button id="btnHistoric"               onclick="setMode('historic')">Historical</button>
       </div>
@@ -344,10 +339,6 @@ const SERIES_LABELS = {
   WKJSTUS1: 'Jet Fuel Stocks',
 };
 
-const DAILY_DEMAND = {
-  WCRSTUS1: 16200, WCESTUS1: 16200, WCSSTUS1: null,
-  WGRSTUS1: 8700,  WDISTUS1: 3700,  WKJSTUS1: 1650,
-};
 
 // ── Flows config ──────────────────────────────────────────────────────────────
 
@@ -441,7 +432,6 @@ let flowChart   = null;
 let priceChart  = null;
 let cachedData  = null;
 let chartMode   = 'seasonal';
-let unitMode    = 'abs';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -451,16 +441,9 @@ function fmtN(n, dec = 0) {
 }
 
 function fmt(n) { return fmtN(n, 1); }
-function unitLabel() { return unitMode === 'days' ? 'days' : 'million bbl'; }
 function sign(n) { return n >= 0 ? '+' : ''; }
 
-function toDays(v) {
-  const demand = DAILY_DEMAND[getActiveSeries()];
-  return (demand == null || v == null) ? null : v / demand;
-}
-
 function convertArr(arr) {
-  if (unitMode === 'days') return arr.map(v => v == null ? null : toDays(v));
   return arr.map(v => v == null ? null : v / 1000);
 }
 
@@ -517,20 +500,10 @@ function getActiveSeries() {
   return getActiveVal(grp);
 }
 
-function setUnit(unit) {
-  unitMode = unit;
-  document.getElementById('btnAbs').classList.toggle('active',  unit === 'abs');
-  document.getElementById('btnDays').classList.toggle('active', unit === 'days');
-  const noSupply = DAILY_DEMAND[getActiveSeries()] == null;
-  if (unit === 'days' && noSupply) { showErr('inv', 'Days of supply is not applicable for the SPR.'); return; }
-  hideErr('inv');
-  if (cachedData) renderAll();
-}
 
 async function loadData() {
   const series    = getActiveSeries();
   const yearsBack = parseInt(getActiveVal('yearsGrp'), 10);
-  if (unitMode === 'days' && DAILY_DEMAND[series] == null) setUnit('abs');
   hideErr('inv');
   showLoading('inv', true);
   try {
@@ -596,9 +569,8 @@ function renderSeasonalChart(s, label) {
   const canvas = document.getElementById('mainChart');
   canvas.style.display = 'block';
   const yFrom = s.prevYears.at(-1) ?? '', yTo = s.prevYears[0] ?? '';
-  const unit  = unitMode === 'days' ? ' (days of supply)' : ' (million bbl)';
   document.getElementById('chartTitle').textContent =
-    `${label}${unit} — ${s.currentYear} vs. historical band (${yFrom}–${yTo})`;
+    `${label} (million bbl) — ${s.currentYear} vs. historical band (${yFrom}–${yTo})`;
   if (mainChart) mainChart.destroy();
   mainChart = new Chart(canvas, {
     type: 'line',
@@ -610,7 +582,7 @@ function renderSeasonalChart(s, label) {
         { label: String(s.currentYear), data: convertArr(s.currentLine), borderColor: '#f97316', backgroundColor: 'transparent', borderWidth: 2.5, fill: false, pointRadius: 3, pointHoverRadius: 6, tension: 0.3, spanGaps: false, order: 1 },
       ],
     },
-    options: { ...BASE_OPT, plugins: { legend: { ...LEGEND, labels: { ...LEGEND.labels, filter: i => i.datasetIndex !== 1 } }, tooltip: { callbacks: { label: ctx => ctx.parsed.y == null ? null : ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)} ${unitLabel()}` } } }, scales: { x: XSCALE, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmt(v) } } } },
+    options: { ...BASE_OPT, plugins: { legend: { ...LEGEND, labels: { ...LEGEND.labels, filter: i => i.datasetIndex !== 1 } }, tooltip: { callbacks: { label: ctx => ctx.parsed.y == null ? null : ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)} million bbl` } } }, scales: { x: XSCALE, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmt(v) } } } },
   });
 }
 
@@ -619,13 +591,12 @@ function renderHistoricChart(data, label, yearsBack) {
   canvas.style.display = 'block';
   const cutoff  = new Date(); cutoff.setFullYear(cutoff.getFullYear() - yearsBack);
   const visible = data.filter(d => d.date >= cutoff.toISOString().slice(0, 10));
-  const unit    = unitMode === 'days' ? ' (days of supply)' : ' (million bbl)';
-  document.getElementById('chartTitle').textContent = `${label}${unit} — last ${yearsBack} years`;
+  document.getElementById('chartTitle').textContent = `${label} (million bbl) — last ${yearsBack} years`;
   if (mainChart) mainChart.destroy();
   mainChart = new Chart(canvas, {
     type: 'line',
-    data: { labels: visible.map(d => d.date), datasets: [{ label, data: visible.map(d => unitMode === 'days' ? toDays(d.value) : d.value / 1000), borderColor: '#4f6ef7', backgroundColor: 'rgba(79,110,247,0.1)', fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2 }] },
-    options: { ...BASE_OPT, plugins: { legend: LEGEND, tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)} ${unitLabel()}` } } }, scales: { x: XSCALE, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmt(v) } } } },
+    data: { labels: visible.map(d => d.date), datasets: [{ label, data: visible.map(d => d.value / 1000), borderColor: '#4f6ef7', backgroundColor: 'rgba(79,110,247,0.1)', fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2 }] },
+    options: { ...BASE_OPT, plugins: { legend: LEGEND, tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)} million bbl` } } }, scales: { x: XSCALE, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmt(v) } } } },
   });
 }
 
@@ -636,14 +607,14 @@ function renderDeltaChart(data) {
   const labels = [], deltas = [], colors = [];
   for (let i = 1; i < data.length; i++) {
     const raw = data[i].value - data[i - 1].value;
-    const d   = unitMode === 'days' ? toDays(raw) : raw / 1000;
+    const d   = raw / 1000;
     labels.push(data[i].date); deltas.push(d);
     colors.push(d >= 0 ? 'rgba(74,222,128,0.75)' : 'rgba(248,113,113,0.75)');
   }
   deltaChart = new Chart(canvas, {
     type: 'bar',
     data: { labels, datasets: [{ data: deltas, backgroundColor: colors, borderWidth: 0 }] },
-    options: { ...BASE_OPT, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${sign(ctx.parsed.y)}${fmt(ctx.parsed.y)} ${unitLabel()}` } } }, scales: { x: { ...XSCALE, ticks: { ...XSCALE.ticks, maxTicksLimit: 14 }, grid: { display: false } }, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmt(v) } } } },
+    options: { ...BASE_OPT, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${sign(ctx.parsed.y)}${fmt(ctx.parsed.y)} million bbl` } } }, scales: { x: { ...XSCALE, ticks: { ...XSCALE.ticks, maxTicksLimit: 14 }, grid: { display: false } }, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmt(v) } } } },
   });
 }
 
