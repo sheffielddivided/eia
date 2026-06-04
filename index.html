@@ -257,7 +257,7 @@
       <select id="priceGroupSel" onchange="loadPrices()">
         <option value="crude">Crude Oil — WTI &amp; Brent ($/bbl)</option>
         <option value="fuel">Retail Fuel — Gasoline &amp; Diesel ($/gallon)</option>
-        <option value="natgas">Natural Gas — Henry Hub ($/MMBtu)</option>
+        <option value="natgas">Natural Gas — Henry Hub NYMEX ($/MMBtu)</option>
       </select>
 
       <div class="toggle-group" id="pricePeriodGrp">
@@ -408,11 +408,10 @@ const PRICE_GROUPS = {
     ],
   },
   natgas: {
-    title: 'Natural Gas — Henry Hub Spot Price',
+    title: 'Natural Gas — Henry Hub (NYMEX front month)',
     unit: '$/MMBtu',
     series: [
-      { label: 'Henry Hub', endpoint: 'steo', color: '#a78bfa', freq: 'monthly',
-        facets: { 'facets[seriesId][]': 'NGWHHUS' } },
+      { id: 'RNGC1', label: 'Henry Hub', endpoint: 'natural-gas/pri/fut', color: '#a78bfa', freq: 'weekly' },
     ],
   },
 };
@@ -658,12 +657,12 @@ async function fetchLng(weeks) {
   const cutoff  = new Date(); cutoff.setMonth(cutoff.getMonth() - months);
   const cutoffStr = cutoff.toISOString().slice(0, 7); // YYYY-MM
 
-  // Omit start/end — lngex rejects date params; filter client-side instead
+  // Omit start/end — lnge rejects date params; filter client-side instead
   const urlParams = new URLSearchParams({
     api_key: API_KEY, 'data[0]': 'value', frequency: 'monthly',
     'sort[0][column]': 'period', 'sort[0][direction]': 'desc', length: 5000, offset: 0,
   });
-  const url  = `https://api.eia.gov/v2/natural-gas/move/lngex/data/?${urlParams}`;
+  const url  = `https://api.eia.gov/v2/natural-gas/move/lnge/data/?${urlParams}`;
   const json = await apiFetch(url);
   const raw  = json?.response?.data;
   if (!raw?.length) throw new Error('No LNG data returned from EIA.');
