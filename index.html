@@ -424,8 +424,8 @@ const PRICE_GROUPS = {
     title: 'LNG Exports by Volume',
     unit: 'MMcf/month',
     series: [
-      { label: 'Total LNG Exports', endpoint: 'natural-gas/move/poe2', color: '#f97316', freq: 'monthly',
-        facets: { 'facets[process][]': ['ENG', 'PNG'] }, sumByPeriod: true },
+      { label: 'Total LNG Exports', endpoint: 'natural-gas/move/expc', color: '#f97316', freq: 'monthly',
+        facets: { 'facets[process][]': 'ENG' }, sumByPeriod: true },
     ],
   },
 };
