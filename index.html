@@ -657,12 +657,16 @@ async function fetchLng(weeks) {
   const cutoff  = new Date(); cutoff.setMonth(cutoff.getMonth() - months);
   const cutoffStr = cutoff.toISOString().slice(0, 7); // YYYY-MM
 
-  // Omit start/end — lnge rejects date params; filter client-side instead
+  // Endpoint: natural-gas/move/poe2 (LNG exports by point of exit)
+  // Facets: process ENG + PNG; start in YYYY-MM format
   const urlParams = new URLSearchParams({
     api_key: API_KEY, 'data[0]': 'value', frequency: 'monthly',
+    start: cutoffStr,
     'sort[0][column]': 'period', 'sort[0][direction]': 'desc', length: 5000, offset: 0,
   });
-  const url  = `https://api.eia.gov/v2/natural-gas/move/lnge/data/?${urlParams}`;
+  urlParams.append('facets[process][]', 'ENG');
+  urlParams.append('facets[process][]', 'PNG');
+  const url  = `https://api.eia.gov/v2/natural-gas/move/poe2/data/?${urlParams}`;
   const json = await apiFetch(url);
   const raw  = json?.response?.data;
   if (!raw?.length) throw new Error('No LNG data returned from EIA.');
