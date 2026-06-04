@@ -254,12 +254,12 @@
   <!-- ══════════════════════════ PRICES ══════════════════════════ -->
   <div id="pricesView" style="display:none">
     <div class="controls">
-      <select id="priceGroupSel" onchange="loadPrices()">
-        <option value="crude">Crude Oil — WTI &amp; Brent ($/bbl)</option>
-        <option value="fuel">Retail Fuel — Gasoline &amp; Diesel ($/gallon)</option>
-        <option value="natgas">Natural Gas — U.S. Domestic ($/MMBtu)</option>
-        <option value="lng">LNG Export Price ($/MMBtu)</option>
-      </select>
+      <div class="toggle-group" id="priceGroupGrp">
+        <button data-val="crude"  class="active" onclick="activateBtn(this);loadPrices()">Oil</button>
+        <button data-val="fuel"   onclick="activateBtn(this);loadPrices()">Products</button>
+        <button data-val="natgas" onclick="activateBtn(this);loadPrices()">Natural Gas</button>
+        <button data-val="lng"    onclick="activateBtn(this);loadPrices()">LNG</button>
+      </div>
 
       <div class="toggle-group" id="pricePeriodGrp">
         <button data-val="52"   onclick="activateBtn(this);loadPrices()">1y</button>
@@ -722,7 +722,7 @@ function renderFlowsChart(byId, product) {
 // ── Prices ────────────────────────────────────────────────────────────────────
 
 async function loadPrices() {
-  const groupKey = document.getElementById('priceGroupSel').value;
+  const groupKey = getActiveVal('priceGroupGrp');
   const weeks    = parseInt(getActiveVal('pricePeriodGrp'), 10);
   const group    = PRICE_GROUPS[groupKey];
   hideErr('price'); showLoading('price', true);
