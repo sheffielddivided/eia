@@ -257,7 +257,8 @@
       <select id="priceGroupSel" onchange="loadPrices()">
         <option value="crude">Crude Oil — WTI &amp; Brent ($/bbl)</option>
         <option value="fuel">Retail Fuel — Gasoline &amp; Diesel ($/gallon)</option>
-        <option value="natgas">Natural Gas — Henry Hub NYMEX ($/MMBtu)</option>
+        <option value="natgas">Natural Gas — U.S. Domestic ($/MMBtu)</option>
+        <option value="lng">LNG Exports (MMcf/month)</option>
       </select>
 
       <div class="toggle-group" id="pricePeriodGrp">
@@ -313,8 +314,12 @@ function eiaUrl(route, params) {
   const p = new URLSearchParams({
     api_key: API_KEY, 'data[0]': 'value',
     'sort[0][column]': 'period', 'sort[0][direction]': 'desc',
-    length: 5000, offset: 0, ...params,
+    length: 5000, offset: 0,
   });
+  for (const [key, val] of Object.entries(params)) {
+    if (Array.isArray(val)) val.forEach(v => p.append(key, v));
+    else p.set(key, val);
+  }
   return `https://api.eia.gov/v2/${route}/data/?${p}`;
 }
 
@@ -408,10 +413,19 @@ const PRICE_GROUPS = {
     ],
   },
   natgas: {
-    title: 'Natural Gas — Henry Hub (NYMEX front month)',
+    title: 'U.S. Natural Gas — Domestic Price',
     unit: '$/MMBtu',
     series: [
-      { id: 'RNGC1', label: 'Henry Hub', endpoint: 'natural-gas/pri/fut', color: '#a78bfa', freq: 'weekly', facets: {} },
+      { label: 'U.S. Natural Gas (domestic)', endpoint: 'natural-gas/pri/fut', color: '#a78bfa', freq: 'weekly',
+        facets: { 'facets[series][]': 'RNGWHHD', 'facets[process][]': 'PS0' } },
+    ],
+  },
+  lng: {
+    title: 'LNG Exports by Volume',
+    unit: 'MMcf/month',
+    series: [
+      { label: 'Total LNG Exports', endpoint: 'natural-gas/move/poe2', color: '#f97316', freq: 'monthly',
+        facets: { 'facets[process][]': ['ENG', 'PNG'] }, sumByPeriod: true },
     ],
   },
 };
@@ -717,17 +731,32 @@ async function loadPrices() {
   hideErr('price'); showLoading('price', true);
   try {
     const { start, end } = dateRange(weeks);
+    const startMon = start.slice(0, 7);
+    const endMon   = end.slice(0, 7);
     const results = await Promise.all(group.series.map(async s => {
-      // Some endpoints (e.g. natural-gas/pri/fut) accept no facets — use empty {}
+      const isMonthly   = s.freq === 'monthly';
       const facetParams = s.facets !== undefined ? s.facets : { 'facets[series][]': s.id };
-      const url  = eiaUrl(s.endpoint, { frequency: s.freq, ...facetParams, start, end });
+      const url  = eiaUrl(s.endpoint, { frequency: s.freq, ...facetParams,
+        start: isMonthly ? startMon : start, end: isMonthly ? endMon : end });
       const json = await apiFetch(url);
-      const today = new Date().toISOString().slice(0, 7);
-      const raw  = (json?.response?.data ?? [])
-        .filter(d => !s.id || !d.series || d.series === s.id) // client-side series filter
-        .map(d => ({ date: d.period, value: parseFloat(d.value) }))
-        .filter(d => !isNaN(d.value) && d.date <= today)
-        .sort((a, b) => a.date.localeCompare(b.date));
+      let raw;
+      if (s.sumByPeriod) {
+        const today = new Date().toISOString().slice(0, 7);
+        const byPeriod = {};
+        for (const d of (json?.response?.data ?? [])) {
+          const v = parseFloat(d.value);
+          if (isNaN(v) || d.period > today) continue;
+          byPeriod[d.period] = (byPeriod[d.period] ?? 0) + v;
+        }
+        raw = Object.entries(byPeriod).map(([date, value]) => ({ date, value })).sort((a, b) => a.date.localeCompare(b.date));
+      } else {
+        const today = new Date().toISOString().slice(0, 10);
+        raw = (json?.response?.data ?? [])
+          .filter(d => !s.id || !d.series || d.series === s.id)
+          .map(d => ({ date: d.period, value: parseFloat(d.value) }))
+          .filter(d => !isNaN(d.value) && d.date <= today)
+          .sort((a, b) => a.date.localeCompare(b.date));
+      }
       return { series: s, data: raw };
     }));
     renderPricesChart(results, group);
