@@ -110,35 +110,6 @@
 
     .spacer { flex: 1; }
 
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-      gap: 1rem;
-      margin-bottom: 2rem;
-    }
-
-    .stat-card {
-      background: #1a1d27;
-      border: 1px solid #2d3148;
-      border-radius: 10px;
-      padding: 1.15rem 1.4rem;
-    }
-
-    .stat-card .lbl {
-      font-size: 0.72rem;
-      color: #64748b;
-      text-transform: uppercase;
-      letter-spacing: 0.07em;
-      margin-bottom: 0.35rem;
-    }
-
-    .stat-card .val { font-size: 1.55rem; font-weight: 700; color: #f1f5f9; }
-    .stat-card .sub { font-size: 0.78rem; margin-top: 0.2rem; }
-
-    .sub.up   { color: #4ade80; }
-    .sub.down { color: #f87171; }
-    .sub.flat { color: #94a3b8; }
-
     .chart-card {
       background: #1a1d27;
       border: 1px solid #2d3148;
@@ -185,10 +156,11 @@
       margin-bottom: 1rem;
     }
 
-    .unit-note {
+    .footnote {
       font-size: 0.72rem;
       color: #475569;
-      margin-left: 0.25rem;
+      margin-top: 0.6rem;
+      text-align: right;
     }
   </style>
 </head>
@@ -254,35 +226,13 @@
 
   <div id="errorBox" style="display:none"></div>
 
-  <div class="grid">
-    <div class="stat-card">
-      <div class="lbl">Latest value</div>
-      <div class="val" id="statLast">—</div>
-      <div class="sub flat" id="statDate">loading…</div>
-    </div>
-    <div class="stat-card">
-      <div class="lbl">Week-over-week change</div>
-      <div class="val" id="statWow">—</div>
-      <div class="sub flat" id="statWowPct"></div>
-    </div>
-    <div class="stat-card">
-      <div class="lbl">vs. historical average</div>
-      <div class="val" id="statAvg">—</div>
-      <div class="sub flat" id="statAvgDiff"></div>
-    </div>
-    <div class="stat-card">
-      <div class="lbl">Historical band (this week)</div>
-      <div class="val" id="statMax">—</div>
-      <div class="sub flat" id="statMin"></div>
-    </div>
-  </div>
-
   <div class="chart-card">
     <h2 id="chartTitle">Loading…</h2>
     <div class="chart-wrap">
       <div class="status" id="loadingMsg"><div class="spinner"></div><br>Fetching data from EIA…</div>
       <canvas id="mainChart" style="display:none"></canvas>
     </div>
+    <div class="footnote" id="footerMain"></div>
   </div>
 
   <div class="chart-card">
@@ -290,6 +240,7 @@
     <div class="chart-wrap" style="height:220px">
       <canvas id="deltaChart" style="display:none"></canvas>
     </div>
+    <div class="footnote" id="footerDelta"></div>
   </div>
 </main>
 
@@ -492,48 +443,16 @@ function renderAll() {
   const yearsBack = parseInt(document.getElementById('yearsSel').value, 10);
   const label     = SERIES_LABELS[series] || series;
   const seasonal  = buildSeasonalData(cachedData, yearsBack);
+  const lastDate  = seasonal.currentYearArr.at(-1)?.date ?? cachedData.at(-1)?.date ?? '';
 
-  renderStats(seasonal);
+  const note = `Last updated: ${lastDate} · Source: U.S. EIA`;
+  document.getElementById('footerMain').textContent  = note;
+  document.getElementById('footerDelta').textContent = note;
+
   renderDeltaChart(seasonal.currentYearArr);
 
   if (chartMode === 'seasonal') renderSeasonalChart(seasonal, label);
   else renderHistoricChart(cachedData, label, yearsBack);
-}
-
-function renderStats(s) {
-  const arr  = s.currentYearArr;
-  const last = arr[arr.length - 1];
-  const prev = arr[arr.length - 2];
-
-  const lastV = unitMode === 'days' ? toDays(last?.value) : last?.value;
-  const prevV = unitMode === 'days' ? toDays(prev?.value) : prev?.value;
-
-  document.getElementById('statLast').textContent = fmt(lastV);
-  document.getElementById('statDate').textContent = last?.date ?? '';
-
-  if (lastV != null && prevV != null) {
-    const diff = lastV - prevV;
-    const pct  = (diff / prevV) * 100;
-    document.getElementById('statWow').textContent    = `${sign(diff)}${fmt(diff)}`;
-    document.getElementById('statWowPct').textContent = `${sign(pct)}${pct.toFixed(2)} %`;
-    document.getElementById('statWow').className      = 'val';
-    document.getElementById('statWowPct').className   = `sub ${diff >= 0 ? 'up' : 'down'}`;
-  }
-
-  if (last) {
-    const wi  = weekOfYear(last.date);
-    const avg = unitMode === 'days' ? toDays(s.avgBand[wi]) : s.avgBand[wi];
-    if (avg != null && lastV != null) {
-      const diff = lastV - avg;
-      document.getElementById('statAvg').textContent     = `${sign(diff)}${fmt(diff)}`;
-      document.getElementById('statAvgDiff').textContent = `vs. hist. avg (${fmt(avg)} ${unitLabel()})`;
-      document.getElementById('statAvgDiff').className   = `sub ${diff >= 0 ? 'up' : 'down'}`;
-    }
-    const lo = unitMode === 'days' ? toDays(s.minBand[wi]) : s.minBand[wi];
-    const hi = unitMode === 'days' ? toDays(s.maxBand[wi]) : s.maxBand[wi];
-    document.getElementById('statMax').textContent = `Max: ${fmt(hi)} ${unitLabel()}`;
-    document.getElementById('statMin').textContent = `Min: ${fmt(lo)} ${unitLabel()}`;
-  }
 }
 
 function renderSeasonalChart(s, label) {
