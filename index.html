@@ -258,7 +258,7 @@
         <option value="crude">Crude Oil — WTI &amp; Brent ($/bbl)</option>
         <option value="fuel">Retail Fuel — Gasoline &amp; Diesel ($/gallon)</option>
         <option value="natgas">Natural Gas — U.S. Domestic ($/MMBtu)</option>
-        <option value="lng">LNG Exports (MMcf/month)</option>
+        <option value="lng">LNG Export Price ($/MMBtu)</option>
       </select>
 
       <div class="toggle-group" id="pricePeriodGrp">
@@ -421,10 +421,10 @@ const PRICE_GROUPS = {
     ],
   },
   lng: {
-    title: 'LNG Exports by Volume',
-    unit: 'MMcf/month',
+    title: 'LNG Export Price',
+    unit: '$/MMBtu',
     series: [
-      { label: 'Total LNG Exports', endpoint: 'natural-gas/move/expc', color: '#f97316', freq: 'monthly',
+      { label: 'LNG Export Price', endpoint: 'natural-gas/move/expc', color: '#f97316', freq: 'monthly',
         facets: { 'facets[process][]': 'PNG' }, sumByPeriod: true },
     ],
   },
