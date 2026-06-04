@@ -171,7 +171,6 @@
   <!-- ══════════════════════════ INVENTORY ══════════════════════════ -->
   <div id="inventoryView">
     <div class="controls">
-      <label for="seriesSel">Series:</label>
       <select id="seriesSel" onchange="loadData()">
         <option value="WCRSTUS1">Crude oil stocks (incl. SPR)</option>
         <option value="WCESTUS1" selected>Crude oil stocks (excl. SPR)</option>
@@ -181,7 +180,6 @@
         <option value="WKJSTUS1">Jet fuel stocks</option>
       </select>
 
-      <label id="yearsLabel">Historical band:</label>
       <div class="toggle-group" id="yearsGrp">
         <button data-val="3"  onclick="activateBtn(this);loadData()">3y</button>
         <button data-val="5"  class="active" onclick="activateBtn(this);loadData()">5y</button>
@@ -224,7 +222,6 @@
   <!-- ══════════════════════════ FLOWS ══════════════════════════ -->
   <div id="flowsView" style="display:none">
     <div class="controls">
-      <label for="flowProductSel">Product:</label>
       <select id="flowProductSel" onchange="loadFlows()">
         <option value="crude">Crude Oil</option>
         <option value="gasoline">Gasoline</option>
@@ -233,7 +230,6 @@
         <option value="lng">LNG (Natural Gas)</option>
       </select>
 
-      <label>Period:</label>
       <div class="toggle-group" id="flowPeriodGrp">
         <button data-val="52"   onclick="activateBtn(this);loadFlows()">1y</button>
         <button data-val="104"  class="active" onclick="activateBtn(this);loadFlows()">2y</button>
@@ -258,14 +254,12 @@
   <!-- ══════════════════════════ PRICES ══════════════════════════ -->
   <div id="pricesView" style="display:none">
     <div class="controls">
-      <label for="priceGroupSel">Prices:</label>
       <select id="priceGroupSel" onchange="loadPrices()">
         <option value="crude">Crude Oil — WTI &amp; Brent ($/bbl)</option>
         <option value="fuel">Retail Fuel — Gasoline &amp; Diesel ($/gallon)</option>
         <option value="natgas">Natural Gas — Henry Hub ($/MMBtu)</option>
       </select>
 
-      <label>Period:</label>
       <div class="toggle-group" id="pricePeriodGrp">
         <button data-val="52"   onclick="activateBtn(this);loadPrices()">1y</button>
         <button data-val="104"  class="active" onclick="activateBtn(this);loadPrices()">2y</button>
@@ -399,7 +393,7 @@ const PRICE_GROUPS = {
     unit: '$/bbl',
     series: [
       { id: 'RWTC',  label: 'WTI',   endpoint: 'petroleum/pri/spt', color: '#fb923c', freq: 'weekly' },
-      { id: 'RBRTE', label: 'Brent', endpoint: 'petroleum/pri/spt', color: '#f97316', freq: 'weekly' },
+      { id: 'RBRTE', label: 'Brent', endpoint: 'petroleum/pri/spt', color: '#38bdf8', freq: 'weekly' },
     ],
   },
   fuel: {
@@ -411,10 +405,11 @@ const PRICE_GROUPS = {
     ],
   },
   natgas: {
-    title: 'Natural Gas — Henry Hub Spot Price',
-    unit: '$/MMBtu',
+    title: 'Natural Gas — City Gate Price',
+    unit: '$/Mcf',
     series: [
-      { id: 'ENG_EPG0_PCS_NUS_DMcf', label: 'Henry Hub', endpoint: 'natural-gas/pri/sum', color: '#a78bfa', freq: 'weekly' },
+      { label: 'City Gate (US avg)', endpoint: 'natural-gas/pri/sum', color: '#a78bfa', freq: 'monthly',
+        facets: { 'facets[process][]': 'PCG', 'facets[duoarea][]': 'NUS' } },
     ],
   },
 };
@@ -478,7 +473,6 @@ function setMode(mode) {
   chartMode = mode;
   document.getElementById('btnSeasonal').classList.toggle('active', mode === 'seasonal');
   document.getElementById('btnHistoric').classList.toggle('active', mode === 'historic');
-  document.getElementById('yearsLabel').textContent = mode === 'seasonal' ? 'Historical band:' : 'Show history:';
   if (cachedData) renderAll();
 }
 
@@ -661,7 +655,7 @@ async function fetchLng(weeks) {
   const months = Math.max(12, Math.round(weeks * 12 / 52));
   const end    = new Date();
   const start  = new Date(); start.setMonth(start.getMonth() - months);
-  const toISO  = d => d.toISOString().slice(0, 10);
+  const toISO  = d => d.toISOString().slice(0, 7);
 
   const urlParams = new URLSearchParams({
     api_key: API_KEY, 'data[0]': 'value', frequency: 'monthly',
@@ -724,7 +718,8 @@ async function loadPrices() {
     const { start, end } = dateRange(weeks);
     // Fetch each series (may be from different endpoints) in parallel
     const results = await Promise.all(group.series.map(async s => {
-      const url  = eiaUrl(s.endpoint, { frequency: s.freq, 'facets[series][]': s.id, start, end });
+      const facetParams = s.facets ?? { 'facets[series][]': s.id };
+      const url  = eiaUrl(s.endpoint, { frequency: s.freq, ...facetParams, start, end });
       const json = await apiFetch(url);
       const raw  = (json?.response?.data ?? [])
         .map(d => ({ date: d.period, value: parseFloat(d.value) }))
