@@ -227,7 +227,7 @@
         <option value="gasoline">Gasoline</option>
         <option value="distillate">Distillate (diesel / heating oil)</option>
         <option value="jetfuel">Jet Fuel</option>
-        <option value="lng">LNG (Natural Gas)</option>
+        <option value="lng">LNG Exports</option>
       </select>
 
       <div class="toggle-group" id="flowPeriodGrp">
@@ -299,7 +299,11 @@ async function apiFetch(url) {
   const hit = _cache.get(url);
   if (hit && Date.now() - hit.ts < CACHE_TTL) return hit.json;
   const resp = await fetch(url);
-  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  if (!resp.ok) {
+    let detail = '';
+    try { const j = await resp.json(); detail = ': ' + (j?.error ?? j?.['error-message'] ?? JSON.stringify(j)); } catch {}
+    throw new Error(`HTTP ${resp.status}${detail}`);
+  }
   const json = await resp.json();
   _cache.set(url, { json, ts: Date.now() });
   return json;
@@ -377,10 +381,9 @@ const FLOW_PRODUCTS = {
     ],
   },
   lng: {
-    label: 'LNG', unit: 'MMcf', lngMode: true,
+    label: 'LNG Exports', unit: 'MMcf', lngMode: true,
     series: [
-      { id: 'LNG_EXPORTS', label: 'Exports', color: '#f97316', dash: [] },
-      { id: 'LNG_IMPORTS', label: 'Imports', color: '#38bdf8', dash: [] },
+      { id: 'LNG_EXPORTS', label: 'Total LNG Exports', color: '#f97316', dash: [] },
     ],
   },
 };
@@ -405,11 +408,11 @@ const PRICE_GROUPS = {
     ],
   },
   natgas: {
-    title: 'Natural Gas — City Gate Price',
-    unit: '$/Mcf',
+    title: 'Natural Gas — Henry Hub Spot Price',
+    unit: '$/MMBtu',
     series: [
-      { label: 'City Gate (US avg)', endpoint: 'natural-gas/pri/sum', color: '#a78bfa', freq: 'monthly',
-        facets: { 'facets[process][]': 'PCG', 'facets[duoarea][]': 'NUS' } },
+      { label: 'Henry Hub', endpoint: 'steo', color: '#a78bfa', freq: 'monthly',
+        facets: { 'facets[seriesId][]': 'NGWHHUS' } },
     ],
   },
 };
@@ -651,15 +654,13 @@ async function fetchPetroleumFlows(product, weeks) {
 }
 
 async function fetchLng(weeks) {
-  // LNG data is available monthly via natural-gas/move/lngex
-  const months = Math.max(12, Math.round(weeks * 12 / 52));
-  const end    = new Date();
-  const start  = new Date(); start.setMonth(start.getMonth() - months);
-  const toISO  = d => d.toISOString().slice(0, 7);
+  const months  = Math.max(12, Math.round(weeks * 12 / 52));
+  const cutoff  = new Date(); cutoff.setMonth(cutoff.getMonth() - months);
+  const cutoffStr = cutoff.toISOString().slice(0, 7); // YYYY-MM
 
+  // Omit start/end — lngex rejects date params; filter client-side instead
   const urlParams = new URLSearchParams({
     api_key: API_KEY, 'data[0]': 'value', frequency: 'monthly',
-    start: toISO(start), end: toISO(end),
     'sort[0][column]': 'period', 'sort[0][direction]': 'desc', length: 5000, offset: 0,
   });
   const url  = `https://api.eia.gov/v2/natural-gas/move/lngex/data/?${urlParams}`;
@@ -667,21 +668,18 @@ async function fetchLng(weeks) {
   const raw  = json?.response?.data;
   if (!raw?.length) throw new Error('No LNG data returned from EIA.');
 
-  // Aggregate rows by period into exports vs imports based on movetype
-  const byType = {};
+  // Aggregate rows by period (sum across all export terminals)
+  const byPeriod = {};
   for (const row of raw) {
+    if (row.period < cutoffStr) continue;
     const v = parseFloat(row.value);
     if (isNaN(v)) continue;
-    const mv  = (row.movetype ?? row.type ?? '').toLowerCase();
-    const key = mv.includes('import') ? 'LNG_IMPORTS' : 'LNG_EXPORTS';
-    if (!byType[key]) byType[key] = {};
-    byType[key][row.period] = (byType[key][row.period] ?? 0) + v;
+    byPeriod[row.period] = (byPeriod[row.period] ?? 0) + v;
   }
-  const byId = {};
-  for (const [key, map] of Object.entries(byType)) {
-    byId[key] = Object.entries(map).map(([date, value]) => ({ date, value })).sort((a, b) => a.date.localeCompare(b.date));
-  }
-  if (!Object.keys(byId).length) throw new Error('LNG data returned but could not be parsed. Check EIA series availability.');
+  if (!Object.keys(byPeriod).length) throw new Error('No LNG data in requested date range.');
+  const byId = {
+    LNG_EXPORTS: Object.entries(byPeriod).map(([date, value]) => ({ date, value })).sort((a, b) => a.date.localeCompare(b.date)),
+  };
   return byId;
 }
 
@@ -721,9 +719,10 @@ async function loadPrices() {
       const facetParams = s.facets ?? { 'facets[series][]': s.id };
       const url  = eiaUrl(s.endpoint, { frequency: s.freq, ...facetParams, start, end });
       const json = await apiFetch(url);
+      const today = new Date().toISOString().slice(0, 7); // cap at current month
       const raw  = (json?.response?.data ?? [])
         .map(d => ({ date: d.period, value: parseFloat(d.value) }))
-        .filter(d => !isNaN(d.value))
+        .filter(d => !isNaN(d.value) && d.date <= today)
         .sort((a, b) => a.date.localeCompare(b.date));
       return { series: s, data: raw };
     }));
