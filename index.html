@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EIA Oljelagre</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #1a1d27;
+      border-bottom: 1px solid #2d3148;
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    header h1 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+
+    header span {
+      font-size: 0.8rem;
+      color: #64748b;
+      margin-left: auto;
+    }
+
+    .badge {
+      background: #1e3a5f;
+      color: #60a5fa;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      border-radius: 9999px;
+      border: 1px solid #2563eb55;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-bottom: 2rem;
+      align-items: center;
+    }
+
+    .controls label {
+      font-size: 0.85rem;
+      color: #94a3b8;
+    }
+
+    select, button {
+      background: #1e2235;
+      border: 1px solid #2d3148;
+      color: #e2e8f0;
+      border-radius: 6px;
+      padding: 0.45rem 0.9rem;
+      font-size: 0.875rem;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    select:hover, button:hover { border-color: #4f6ef7; }
+
+    button.primary {
+      background: #3b5bdb;
+      border-color: #4f6ef7;
+      font-weight: 600;
+    }
+
+    button.primary:hover { background: #4263eb; }
+    button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .stat-card {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+    }
+
+    .stat-card .label {
+      font-size: 0.75rem;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 0.4rem;
+    }
+
+    .stat-card .value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #f1f5f9;
+    }
+
+    .stat-card .sub {
+      font-size: 0.8rem;
+      margin-top: 0.25rem;
+    }
+
+    .sub.up   { color: #4ade80; }
+    .sub.down { color: #f87171; }
+    .sub.flat { color: #94a3b8; }
+
+    .chart-card {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .chart-card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #cbd5e1;
+      margin-bottom: 1rem;
+    }
+
+    .chart-wrap {
+      position: relative;
+      height: 340px;
+    }
+
+    .status {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #475569;
+      font-size: 0.9rem;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 28px;
+      height: 28px;
+      border: 3px solid #2d3148;
+      border-top-color: #4f6ef7;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-bottom: 0.75rem;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-box {
+      background: #2d1515;
+      border: 1px solid #7f1d1d;
+      color: #fca5a5;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      font-size: 0.875rem;
+      margin-bottom: 1rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+
+    th {
+      text-align: left;
+      padding: 0.6rem 0.8rem;
+      color: #64748b;
+      font-weight: 600;
+      border-bottom: 1px solid #2d3148;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    td {
+      padding: 0.55rem 0.8rem;
+      border-bottom: 1px solid #1e2235;
+      color: #cbd5e1;
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #1e2235; }
+
+    .tbl-up   { color: #4ade80; }
+    .tbl-down { color: #f87171; }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="badge">EIA</span>
+  <h1>Oljelagre — USA</h1>
+  <span>Kilde: U.S. Energy Information Administration</span>
+</header>
+
+<main>
+  <div class="controls">
+    <label for="seriesSel">Serie:</label>
+    <select id="seriesSel">
+      <option value="WCRSTUS1">Råoljelager totalt (inkl. SPR)</option>
+      <option value="WCESTUS1" selected>Råoljelager (ekskl. SPR)</option>
+      <option value="WGRSTUS1">Totalt bensinlager</option>
+      <option value="WDISTUS1">Destillatlager (diesel/fyringsolje)</option>
+      <option value="WKJSTUS1">Flydriv­stofflager</option>
+      <option value="WCRFPUS2">Raffinerikapasitet i drift</option>
+    </select>
+
+    <label for="periodSel">Periode:</label>
+    <select id="periodSel">
+      <option value="52">1 år</option>
+      <option value="104" selected>2 år</option>
+      <option value="260">5 år</option>
+      <option value="520">10 år</option>
+    </select>
+
+    <button class="primary" id="fetchBtn" onclick="loadData()">Hent data</button>
+  </div>
+
+  <div id="errorBox" style="display:none"></div>
+
+  <div class="grid" id="statsGrid">
+    <div class="stat-card"><div class="label">Siste verdi</div><div class="value" id="statLast">—</div><div class="sub flat" id="statDate">laster…</div></div>
+    <div class="stat-card"><div class="label">Endring uke/uke</div><div class="value" id="statWow">—</div><div class="sub flat" id="statWowPct"></div></div>
+    <div class="stat-card"><div class="label">52-ukers snitt</div><div class="value" id="statAvg">—</div><div class="sub flat" id="statAvgDiff"></div></div>
+    <div class="stat-card"><div class="label">52-ukers rekord</div><div class="value" id="statMax">—</div><div class="sub flat" id="statMin"></div></div>
+  </div>
+
+  <div class="chart-card">
+    <h2 id="chartTitle">Ukentlig lagerdata</h2>
+    <div class="chart-wrap">
+      <div class="status" id="loadingMsg"><div class="spinner"></div><br>Henter data fra EIA…</div>
+      <canvas id="mainChart" style="display:none"></canvas>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <h2>Uke-over-uke endring (tusen fat)</h2>
+    <div class="chart-wrap" style="height:220px">
+      <canvas id="deltaChart" style="display:none"></canvas>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <h2>Siste 20 uker</h2>
+    <div id="tableWrap">
+      <div class="status">Ingen data ennå.</div>
+    </div>
+  </div>
+</main>
+
+<script>
+const API_KEY = 'dmZglvmWG86ewOel1qYABoroVEnhGjUNTiHU4Rki';
+
+const SERIES_LABELS = {
+  WCRSTUS1: 'Råoljelager totalt (inkl. SPR)',
+  WCESTUS1: 'Råoljelager (ekskl. SPR)',
+  WGRSTUS1: 'Totalt bensinlager',
+  WDISTUS1: 'Destillatlager',
+  WKJSTUS1: 'Flydriv­stofflager',
+  WCRFPUS2: 'Raffinerikapasitet i drift',
+};
+
+let mainChart = null;
+let deltaChart = null;
+
+function fmt(n) {
+  if (n == null || isNaN(n)) return '—';
+  return n.toLocaleString('no-NO', { maximumFractionDigits: 0 });
+}
+
+function sign(n) {
+  return n >= 0 ? '+' : '';
+}
+
+async function loadData() {
+  const series   = document.getElementById('seriesSel').value;
+  const weeks    = parseInt(document.getElementById('periodSel').value, 10);
+  const btn      = document.getElementById('fetchBtn');
+
+  btn.disabled = true;
+  showLoading(true);
+  hideError();
+
+  try {
+    const url = buildUrl(series, weeks);
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const json = await resp.json();
+
+    const raw = json?.response?.data;
+    if (!raw || raw.length === 0) throw new Error('Ingen data returnert fra EIA.');
+
+    // Sort ascending by date
+    const data = raw
+      .map(d => ({ date: d.period, value: parseFloat(d.value) }))
+      .filter(d => !isNaN(d.value))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    renderStats(data);
+    renderMainChart(data, SERIES_LABELS[series] || series);
+    renderDeltaChart(data);
+    renderTable(data);
+    showLoading(false);
+  } catch (err) {
+    showError(err.message);
+    showLoading(false);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function buildUrl(series, weeks) {
+  const end   = new Date();
+  const start = new Date();
+  start.setDate(start.getDate() - weeks * 7);
+
+  const fmt = d => d.toISOString().slice(0, 10);
+
+  const params = new URLSearchParams({
+    api_key: API_KEY,
+    frequency: 'weekly',
+    'data[0]': 'value',
+    'facets[series][]': series,
+    start: fmt(start),
+    end: fmt(end),
+    sort[0][column]: 'period',
+    'sort[0][direction]': 'desc',
+    length: 1000,
+    offset: 0,
+  });
+
+  return `https://api.eia.gov/v2/petroleum/stoc/wstk/data/?${params}`;
+}
+
+function renderStats(data) {
+  const last   = data[data.length - 1];
+  const prev   = data[data.length - 2];
+  const last52 = data.slice(-52);
+  const avg52  = last52.reduce((s, d) => s + d.value, 0) / last52.length;
+  const max52  = Math.max(...last52.map(d => d.value));
+  const min52  = Math.min(...last52.map(d => d.value));
+
+  document.getElementById('statLast').textContent = fmt(last.value);
+  document.getElementById('statDate').textContent  = last.date;
+
+  if (prev) {
+    const diff = last.value - prev.value;
+    const pct  = (diff / prev.value) * 100;
+    const el   = document.getElementById('statWow');
+    const sub  = document.getElementById('statWowPct');
+    el.textContent  = `${sign(diff)}${fmt(diff)}`;
+    sub.textContent = `${sign(pct)}${pct.toFixed(2)} %`;
+    el.className    = 'value';
+    sub.className   = `sub ${diff >= 0 ? 'up' : 'down'}`;
+  }
+
+  document.getElementById('statAvg').textContent    = fmt(avg52);
+  const avgDiff = last.value - avg52;
+  document.getElementById('statAvgDiff').textContent = `${sign(avgDiff)}${fmt(avgDiff)} vs snitt`;
+  document.getElementById('statAvgDiff').className   = `sub ${avgDiff >= 0 ? 'up' : 'down'}`;
+
+  document.getElementById('statMax').textContent = fmt(max52);
+  document.getElementById('statMin').textContent = `Min: ${fmt(min52)}`;
+}
+
+function renderMainChart(data, label) {
+  const canvas = document.getElementById('mainChart');
+  canvas.style.display = 'block';
+  document.getElementById('chartTitle').textContent = label;
+
+  if (mainChart) mainChart.destroy();
+
+  const labels = data.map(d => d.date);
+  const values = data.map(d => d.value);
+
+  mainChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label,
+        data: values,
+        borderColor: '#4f6ef7',
+        backgroundColor: 'rgba(79,110,247,0.12)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: data.length > 100 ? 0 : 3,
+        pointHoverRadius: 5,
+        borderWidth: 2,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#94a3b8', font: { size: 12 } } },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${fmt(ctx.parsed.y)} tusen fat`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: '#475569', maxTicksLimit: 12, font: { size: 11 } },
+          grid: { color: '#1e2235' },
+        },
+        y: {
+          ticks: {
+            color: '#475569',
+            callback: v => fmt(v),
+            font: { size: 11 },
+          },
+          grid: { color: '#1e2235' },
+        },
+      },
+    },
+  });
+}
+
+function renderDeltaChart(data) {
+  const canvas = document.getElementById('deltaChart');
+  canvas.style.display = 'block';
+
+  if (deltaChart) deltaChart.destroy();
+
+  const labels = [];
+  const deltas = [];
+  const colors = [];
+
+  for (let i = 1; i < data.length; i++) {
+    const d = data[i].value - data[i - 1].value;
+    labels.push(data[i].date);
+    deltas.push(d);
+    colors.push(d >= 0 ? 'rgba(74,222,128,0.75)' : 'rgba(248,113,113,0.75)');
+  }
+
+  deltaChart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Uke-over-uke endring',
+        data: deltas,
+        backgroundColor: colors,
+        borderWidth: 0,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${sign(ctx.parsed.y)}${fmt(ctx.parsed.y)} tusen fat`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: '#475569', maxTicksLimit: 14, font: { size: 11 } },
+          grid: { display: false },
+        },
+        y: {
+          ticks: { color: '#475569', callback: v => fmt(v), font: { size: 11 } },
+          grid: { color: '#1e2235' },
+        },
+      },
+    },
+  });
+}
+
+function renderTable(data) {
+  const last20 = data.slice(-20).reverse();
+  let html = '<table><thead><tr><th>Dato</th><th>Lager (tusen fat)</th><th>Endring</th><th>% endring</th></tr></thead><tbody>';
+
+  for (let i = 0; i < last20.length; i++) {
+    const cur  = last20[i];
+    const prev = last20[i + 1];
+    let diffHtml = '<td>—</td><td>—</td>';
+
+    if (prev) {
+      const diff = cur.value - prev.value;
+      const pct  = (diff / prev.value) * 100;
+      const cls  = diff >= 0 ? 'tbl-up' : 'tbl-down';
+      diffHtml   = `<td class="${cls}">${sign(diff)}${fmt(diff)}</td><td class="${cls}">${sign(pct)}${pct.toFixed(2)} %</td>`;
+    }
+
+    html += `<tr><td>${cur.date}</td><td>${fmt(cur.value)}</td>${diffHtml}</tr>`;
+  }
+
+  html += '</tbody></table>';
+  document.getElementById('tableWrap').innerHTML = html;
+}
+
+function showLoading(on) {
+  document.getElementById('loadingMsg').style.display = on ? 'block' : 'none';
+  if (on) {
+    document.getElementById('mainChart').style.display  = 'none';
+    document.getElementById('deltaChart').style.display = 'none';
+  }
+}
+
+function hideError() {
+  const el = document.getElementById('errorBox');
+  el.style.display = 'none';
+  el.textContent = '';
+}
+
+function showError(msg) {
+  const el = document.getElementById('errorBox');
+  el.className = 'error-box';
+  el.textContent = `Feil: ${msg}`;
+  el.style.display = 'block';
+}
+
+// Auto-load on page open
+window.addEventListener('DOMContentLoaded', loadData);
+</script>
+</body>
+</html>
