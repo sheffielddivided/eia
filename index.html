@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>U.S. Oil Inventory</title>
+  <title>U.S. Energy Data from EIA</title>
   <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <link rel="icon" href="apple-touch-icon.png" type="image/png" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -17,7 +17,6 @@
       min-height: 100vh;
     }
 
-    /* ── header ── */
     header {
       background: #1a1d27;
       border-bottom: 1px solid #2d3148;
@@ -26,31 +25,14 @@
       align-items: center;
       gap: 0.7rem;
     }
-
     .site-title { font-size: 0.95rem; font-weight: 600; color: #f1f5f9; }
 
-    /* ── footer ── */
-    .site-footer {
-      text-align: center;
-      padding: 1.5rem 2rem;
-      color: #475569;
-      font-size: 0.78rem;
-      border-top: 1px solid #1e2235;
-      margin-top: 0.5rem;
-    }
-
-    .site-footer a { color: #60a5fa; text-decoration: none; }
-    .site-footer a:hover { text-decoration: underline; }
-
-    /* ── view nav ── */
     .view-nav {
       background: #1a1d27;
       border-bottom: 1px solid #2d3148;
       padding: 0 2rem;
       display: flex;
-      gap: 0;
     }
-
     .view-nav button {
       background: none;
       border: none;
@@ -62,11 +44,9 @@
       transition: color 0.15s, border-color 0.15s;
       margin-bottom: -1px;
     }
-
     .view-nav button:hover { color: #cbd5e1; }
     .view-nav button.active { color: #f1f5f9; border-bottom-color: #4f6ef7; font-weight: 600; }
 
-    /* ── layout ── */
     main { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; }
 
     .controls {
@@ -76,7 +56,6 @@
       margin-bottom: 2rem;
       align-items: center;
     }
-
     .controls label { font-size: 0.82rem; color: #94a3b8; white-space: nowrap; }
 
     select {
@@ -98,7 +77,6 @@
       border-radius: 6px;
       overflow: hidden;
     }
-
     .toggle-group button {
       background: #1e2235;
       border: none;
@@ -109,14 +87,12 @@
       transition: background 0.15s, color 0.15s;
       white-space: nowrap;
     }
-
     .toggle-group button:not(:last-child) { border-right: 1px solid #2d3148; }
     .toggle-group button.active { background: #3b5bdb; color: #fff; font-weight: 600; }
-    .toggle-group button:not(.active):hover { background: #252840; color: #e2e8f0; }
+    .toggle-group button:not(.active):hover { background: '#252840'; color: #e2e8f0; }
 
     .spacer { flex: 1; }
 
-    /* ── cards ── */
     .chart-card {
       background: #1a1d27;
       border: 1px solid #2d3148;
@@ -124,23 +100,10 @@
       padding: 1.5rem;
       margin-bottom: 1.5rem;
     }
-
-    .chart-card h2 {
-      font-size: 0.95rem;
-      font-weight: 600;
-      color: #cbd5e1;
-      margin-bottom: 1rem;
-    }
-
+    .chart-card h2 { font-size: 0.95rem; font-weight: 600; color: #cbd5e1; margin-bottom: 1rem; }
     .chart-wrap { position: relative; height: 360px; }
 
-    .status {
-      text-align: center;
-      padding: 3rem 1rem;
-      color: #475569;
-      font-size: 0.9rem;
-    }
-
+    .status { text-align: center; padding: 3rem 1rem; color: #475569; font-size: 0.9rem; }
     .spinner {
       display: inline-block;
       width: 28px; height: 28px;
@@ -150,7 +113,6 @@
       animation: spin 0.7s linear infinite;
       margin-bottom: 0.75rem;
     }
-
     @keyframes spin { to { transform: rotate(360deg); } }
 
     .error-box {
@@ -163,12 +125,18 @@
       margin-bottom: 1rem;
     }
 
-    .footnote {
-      font-size: 0.72rem;
+    .footnote { font-size: 0.72rem; color: #475569; margin-top: 0.6rem; text-align: right; }
+
+    .site-footer {
+      text-align: center;
+      padding: 1.5rem 2rem;
       color: #475569;
-      margin-top: 0.6rem;
-      text-align: right;
+      font-size: 0.78rem;
+      border-top: 1px solid #1e2235;
+      margin-top: 0.5rem;
     }
+    .site-footer a { color: #60a5fa; text-decoration: none; }
+    .site-footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -178,28 +146,29 @@
     <rect x="7" y="9" width="26" height="22" rx="4" fill="#1e3a8a"/>
     <ellipse cx="20" cy="9" rx="13" ry="4.5" fill="#3b5bdb"/>
     <ellipse cx="20" cy="31" rx="13" ry="4.5" fill="#3b5bdb"/>
-    <rect x="7" y="9" width="26" height="22" rx="4" fill="url(#barrelGrad)"/>
+    <rect x="7" y="9" width="26" height="22" rx="4" fill="url(#bg)"/>
     <line x1="7" y1="16.5" x2="33" y2="16.5" stroke="#60a5fa" stroke-width="1.8" opacity="0.7"/>
     <line x1="7" y1="23.5" x2="33" y2="23.5" stroke="#60a5fa" stroke-width="1.8" opacity="0.7"/>
     <defs>
-      <linearGradient id="barrelGrad" x1="0" y1="0" x2="1" y2="0">
-        <stop offset="0%"   stop-color="#1e3a8a"/>
-        <stop offset="50%"  stop-color="#2d4fc4"/>
+      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%" stop-color="#1e3a8a"/>
+        <stop offset="50%" stop-color="#2d4fc4"/>
         <stop offset="100%" stop-color="#1e3a8a"/>
       </linearGradient>
     </defs>
   </svg>
-  <span class="site-title">U.S. Oil Inventories — EIA Weekly Data</span>
+  <span class="site-title">U.S. Energy Data from EIA</span>
 </header>
 
 <nav class="view-nav">
   <button id="tabInventory" class="active" onclick="setView('inventory')">Inventory</button>
   <button id="tabFlows"                    onclick="setView('flows')">Flows</button>
+  <button id="tabPrices"                   onclick="setView('prices')">Prices</button>
 </nav>
 
 <main>
 
-  <!-- ═══════════════════════ INVENTORY VIEW ═══════════════════════ -->
+  <!-- ══════════════════════════ INVENTORY ══════════════════════════ -->
   <div id="inventoryView">
     <div class="controls">
       <label for="seriesSel">Series:</label>
@@ -222,7 +191,7 @@
       <div class="spacer"></div>
 
       <div class="toggle-group">
-        <button id="btnAbs"  class="active" onclick="setUnit('abs')">Thousand bbl</button>
+        <button id="btnAbs"  class="active" onclick="setUnit('abs')">Million bbl</button>
         <button id="btnDays"               onclick="setUnit('days')">Days of supply</button>
       </div>
 
@@ -252,7 +221,7 @@
     </div>
   </div>
 
-  <!-- ═══════════════════════ FLOWS VIEW ═══════════════════════ -->
+  <!-- ══════════════════════════ FLOWS ══════════════════════════ -->
   <div id="flowsView" style="display:none">
     <div class="controls">
       <label for="flowProductSel">Product:</label>
@@ -269,6 +238,8 @@
         <option value="52">1 year</option>
         <option value="104" selected>2 years</option>
         <option value="260">5 years</option>
+        <option value="520">10 years</option>
+        <option value="1040">20 years</option>
       </select>
     </div>
 
@@ -284,14 +255,77 @@
     </div>
   </div>
 
+  <!-- ══════════════════════════ PRICES ══════════════════════════ -->
+  <div id="pricesView" style="display:none">
+    <div class="controls">
+      <label for="priceGroupSel">Prices:</label>
+      <select id="priceGroupSel" onchange="loadPrices()">
+        <option value="crude">Crude Oil — WTI &amp; Brent ($/bbl)</option>
+        <option value="fuel">Retail Fuel — Gasoline &amp; Diesel ($/gallon)</option>
+        <option value="natgas">Natural Gas — Henry Hub ($/MMBtu)</option>
+      </select>
+
+      <label for="pricePeriodSel">Period:</label>
+      <select id="pricePeriodSel" onchange="loadPrices()">
+        <option value="52">1 year</option>
+        <option value="104" selected>2 years</option>
+        <option value="260">5 years</option>
+        <option value="520">10 years</option>
+        <option value="1040">20 years</option>
+      </select>
+    </div>
+
+    <div id="priceErrorBox" style="display:none"></div>
+
+    <div class="chart-card">
+      <h2 id="priceChartTitle">Loading…</h2>
+      <div class="chart-wrap">
+        <div class="status" id="priceLoadingMsg"><div class="spinner"></div><br>Fetching data from EIA…</div>
+        <canvas id="priceChart" style="display:none"></canvas>
+      </div>
+      <div class="footnote" id="footerPrice"></div>
+    </div>
+  </div>
+
 </main>
 
 <footer class="site-footer">
-  Data: <a href="https://www.eia.gov/petroleum/supply/weekly/" target="_blank" rel="noopener noreferrer">U.S. Energy Information Administration — Weekly Petroleum Status Report</a>
+  Data: <a href="https://www.eia.gov" target="_blank" rel="noopener noreferrer">U.S. Energy Information Administration (EIA)</a>
 </footer>
 
 <script>
 const API_KEY = 'dmZglvmWG86ewOel1qYABoroVEnhGjUNTiHU4Rki';
+
+// ── Cache (in-memory, 30-min TTL) ─────────────────────────────────────────────
+
+const _cache = new Map();
+const CACHE_TTL = 30 * 60 * 1000;
+
+async function apiFetch(url) {
+  const hit = _cache.get(url);
+  if (hit && Date.now() - hit.ts < CACHE_TTL) return hit.json;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const json = await resp.json();
+  _cache.set(url, { json, ts: Date.now() });
+  return json;
+}
+
+function eiaUrl(route, params) {
+  const p = new URLSearchParams({
+    api_key: API_KEY, 'data[0]': 'value',
+    'sort[0][column]': 'period', 'sort[0][direction]': 'desc',
+    length: 5000, offset: 0, ...params,
+  });
+  return `https://api.eia.gov/v2/${route}/data/?${p}`;
+}
+
+function dateRange(weeks) {
+  const toISO = d => d.toISOString().slice(0, 10);
+  const end   = new Date();
+  const start = new Date(); start.setDate(start.getDate() - weeks * 7);
+  return { start: toISO(start), end: toISO(end) };
+}
 
 // ── Inventory config ──────────────────────────────────────────────────────────
 
@@ -313,80 +347,96 @@ const DAILY_DEMAND = {
 
 const FLOW_PRODUCTS = {
   crude: {
-    label: 'Crude Oil',
-    endpoint: 'petroleum/sum/sndw',
-    unit: 'thousand bbl/day',
+    label: 'Crude Oil', endpoint: 'petroleum/sum/sndw', unit: 'thousand bbl/day',
     series: [
-      { id: 'WCRFPUS2', label: 'Production',      color: '#22c55e', dash: [] },
-      { id: 'WCRIMUS2', label: 'Imports',          color: '#38bdf8', dash: [] },
-      { id: 'WCREXUS2', label: 'Exports',          color: '#f97316', dash: [] },
-      { id: 'WCRRIUS2', label: 'Refinery Input',   color: '#e879f9', dash: [5,3] },
+      { id: 'WCRFPUS2', label: 'Production',    color: '#22c55e', dash: [] },
+      { id: 'WCRIMUS2', label: 'Imports',        color: '#38bdf8', dash: [] },
+      { id: 'WCREXUS2', label: 'Exports',        color: '#f97316', dash: [] },
+      { id: 'WCRRIUS2', label: 'Refinery Input', color: '#e879f9', dash: [5,3] },
     ],
   },
   gasoline: {
-    label: 'Gasoline',
-    endpoint: 'petroleum/sum/sndw',
-    unit: 'thousand bbl/day',
+    label: 'Gasoline', endpoint: 'petroleum/sum/sndw', unit: 'thousand bbl/day',
     series: [
-      { id: 'WGFRPUS2', label: 'Production',       color: '#22c55e', dash: [] },
-      { id: 'WGFIMUS2', label: 'Imports',           color: '#38bdf8', dash: [] },
-      { id: 'WGFEXUS2', label: 'Exports',           color: '#f97316', dash: [] },
-      { id: 'WGFUPUS2', label: 'Product Supplied',  color: '#e879f9', dash: [5,3] },
+      { id: 'WGFRPUS2', label: 'Production',      color: '#22c55e', dash: [] },
+      { id: 'WGFIMUS2', label: 'Imports',          color: '#38bdf8', dash: [] },
+      { id: 'WGFEXUS2', label: 'Exports',          color: '#f97316', dash: [] },
+      { id: 'WGFUPUS2', label: 'Product Supplied', color: '#e879f9', dash: [5,3] },
     ],
   },
   distillate: {
-    label: 'Distillate',
-    endpoint: 'petroleum/sum/sndw',
-    unit: 'thousand bbl/day',
+    label: 'Distillate', endpoint: 'petroleum/sum/sndw', unit: 'thousand bbl/day',
     series: [
-      { id: 'WDIRPUS2', label: 'Production',       color: '#22c55e', dash: [] },
-      { id: 'WDIIMUS2', label: 'Imports',           color: '#38bdf8', dash: [] },
-      { id: 'WDIEXUS2', label: 'Exports',           color: '#f97316', dash: [] },
-      { id: 'WDIUPUS2', label: 'Product Supplied',  color: '#e879f9', dash: [5,3] },
+      { id: 'WDIRPUS2', label: 'Production',      color: '#22c55e', dash: [] },
+      { id: 'WDIIMUS2', label: 'Imports',          color: '#38bdf8', dash: [] },
+      { id: 'WDIEXUS2', label: 'Exports',          color: '#f97316', dash: [] },
+      { id: 'WDIUPUS2', label: 'Product Supplied', color: '#e879f9', dash: [5,3] },
     ],
   },
   jetfuel: {
-    label: 'Jet Fuel',
-    endpoint: 'petroleum/sum/sndw',
-    unit: 'thousand bbl/day',
+    label: 'Jet Fuel', endpoint: 'petroleum/sum/sndw', unit: 'thousand bbl/day',
     series: [
-      { id: 'WKJRPUS2', label: 'Production',       color: '#22c55e', dash: [] },
-      { id: 'WKJIMUS2', label: 'Imports',           color: '#38bdf8', dash: [] },
-      { id: 'WKJEXUS2', label: 'Exports',           color: '#f97316', dash: [] },
-      { id: 'WKJUPUS2', label: 'Product Supplied',  color: '#e879f9', dash: [5,3] },
+      { id: 'WKJRPUS2', label: 'Production',      color: '#22c55e', dash: [] },
+      { id: 'WKJIMUS2', label: 'Imports',          color: '#38bdf8', dash: [] },
+      { id: 'WKJEXUS2', label: 'Exports',          color: '#f97316', dash: [] },
+      { id: 'WKJUPUS2', label: 'Product Supplied', color: '#e879f9', dash: [5,3] },
     ],
   },
   lng: {
-    label: 'LNG',
-    endpoint: 'natural-gas/move/lngex',
-    unit: 'MMcf/day',
-    lngMode: true,
+    label: 'LNG', unit: 'MMcf', lngMode: true,
     series: [
-      { id: 'LNG_EXPORTS', label: 'Exports',  color: '#f97316', dash: [] },
-      { id: 'LNG_IMPORTS', label: 'Imports',  color: '#38bdf8', dash: [] },
+      { id: 'LNG_EXPORTS', label: 'Exports', color: '#f97316', dash: [] },
+      { id: 'LNG_IMPORTS', label: 'Imports', color: '#38bdf8', dash: [] },
     ],
   },
 };
 
-// ── State ─────────────────────────────────────────────────────────────────────
+// ── Prices config ─────────────────────────────────────────────────────────────
 
-let mainChart  = null;
-let deltaChart = null;
-let flowChart  = null;
-let cachedData = null;
-let chartMode  = 'seasonal';
-let unitMode   = 'abs';
-let activeView = 'inventory';
+const PRICE_GROUPS = {
+  crude: {
+    title: 'Crude Oil Spot Prices',
+    unit: '$/bbl',
+    series: [
+      { id: 'RWTC',  label: 'WTI',   endpoint: 'petroleum/pri/spt', color: '#fb923c', freq: 'weekly' },
+      { id: 'RBRTE', label: 'Brent', endpoint: 'petroleum/pri/spt', color: '#f97316', freq: 'weekly' },
+    ],
+  },
+  fuel: {
+    title: 'Retail Fuel Prices',
+    unit: '$/gallon',
+    series: [
+      { id: 'EMM_EPM0_PTE_NUS_DPG',  label: 'Regular Gasoline', endpoint: 'petroleum/pri/gnd', color: '#22c55e', freq: 'weekly' },
+      { id: 'EMD_EPD2D_PTE_NUS_DPG', label: 'Diesel',           endpoint: 'petroleum/pri/gnd', color: '#38bdf8', freq: 'weekly' },
+    ],
+  },
+  natgas: {
+    title: 'Natural Gas — Henry Hub Spot Price',
+    unit: '$/MMBtu',
+    series: [
+      { id: 'ENG_EPG0_PCS_NUS_DMcf', label: 'Henry Hub', endpoint: 'natural-gas/pri/sum', color: '#a78bfa', freq: 'weekly' },
+    ],
+  },
+};
+
+// ── Chart state ───────────────────────────────────────────────────────────────
+
+let mainChart   = null;
+let deltaChart  = null;
+let flowChart   = null;
+let priceChart  = null;
+let cachedData  = null;
+let chartMode   = 'seasonal';
+let unitMode    = 'abs';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function fmtN(n, decimals = 0) {
+function fmtN(n, dec = 0) {
   if (n == null || isNaN(n)) return '—';
-  return n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return n.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 
-// Inventory values from EIA are in thousand bbl; display as million bbl
-function fmt(n) { return fmtN(unitMode === 'days' ? n : n, 1); }
+function fmt(n) { return fmtN(n, 1); }
 function unitLabel() { return unitMode === 'days' ? 'days' : 'million bbl'; }
 function sign(n) { return n >= 0 ? '+' : ''; }
 
@@ -396,8 +446,8 @@ function toDays(v) {
 }
 
 function convertArr(arr) {
-  if (unitMode === 'days') return arr.map(v => (v == null ? null : toDays(v)));
-  return arr.map(v => (v == null ? null : v / 1000));
+  if (unitMode === 'days') return arr.map(v => v == null ? null : toDays(v));
+  return arr.map(v => v == null ? null : v / 1000);
 }
 
 function weekOfYear(dateStr) {
@@ -406,29 +456,23 @@ function weekOfYear(dateStr) {
   return Math.floor((date - new Date(y, 0, 1)) / (7 * 24 * 60 * 60 * 1000));
 }
 
-const CHART_DEFAULTS = {
-  responsive: true,
-  maintainAspectRatio: false,
-  interaction: { mode: 'index', intersect: false },
-  scales: {
-    x: { ticks: { color: '#475569', maxTicksLimit: 13, font: { size: 11 } }, grid: { color: '#1e2235' } },
-    y: { ticks: { color: '#475569', font: { size: 11 } },                    grid: { color: '#1e2235' } },
-  },
-};
+const XSCALE  = { ticks: { color: '#475569', maxTicksLimit: 13, font: { size: 11 } }, grid: { color: '#1e2235' } };
+const YSCALE  = { ticks: { color: '#475569', font: { size: 11 } }, grid: { color: '#1e2235' } };
+const LEGEND  = { labels: { color: '#94a3b8', font: { size: 12 } } };
+const BASE_OPT = { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false } };
 
 // ── View switching ────────────────────────────────────────────────────────────
 
 function setView(view) {
-  activeView = view;
-  document.getElementById('tabInventory').classList.toggle('active', view === 'inventory');
-  document.getElementById('tabFlows').classList.toggle('active',     view === 'flows');
-  document.getElementById('inventoryView').style.display = view === 'inventory' ? '' : 'none';
-  document.getElementById('flowsView').style.display     = view === 'flows'     ? '' : 'none';
-
-  if (view === 'flows' && !flowChart) loadFlows();
+  ['inventory','flows','prices'].forEach(v => {
+    document.getElementById(`tab${v.charAt(0).toUpperCase()+v.slice(1)}`).classList.toggle('active', v === view);
+    document.getElementById(`${v}View`).style.display = v === view ? '' : 'none';
+  });
+  if (view === 'flows'  && !flowChart)  loadFlows();
+  if (view === 'prices' && !priceChart) loadPrices();
 }
 
-// ── Inventory: UI state ───────────────────────────────────────────────────────
+// ── Inventory ─────────────────────────────────────────────────────────────────
 
 function setMode(mode) {
   chartMode = mode;
@@ -443,110 +487,81 @@ function setUnit(unit) {
   document.getElementById('btnAbs').classList.toggle('active',  unit === 'abs');
   document.getElementById('btnDays').classList.toggle('active', unit === 'days');
   const noSupply = DAILY_DEMAND[document.getElementById('seriesSel').value] == null;
-  if (unit === 'days' && noSupply) {
-    showInvError('Days of supply is not applicable for the Strategic Petroleum Reserve.');
-    return;
-  }
-  hideInvError();
+  if (unit === 'days' && noSupply) { showErr('inv', 'Days of supply is not applicable for the SPR.'); return; }
+  hideErr('inv');
   if (cachedData) renderAll();
 }
-
-// ── Inventory: fetch ──────────────────────────────────────────────────────────
 
 async function loadData() {
   const series    = document.getElementById('seriesSel').value;
   const yearsBack = parseInt(document.getElementById('yearsSel').value, 10);
   if (unitMode === 'days' && DAILY_DEMAND[series] == null) setUnit('abs');
-  hideInvError();
-  showInvLoading(true);
-
+  hideErr('inv');
+  showLoading('inv', true);
   try {
-    const toISO = d => d.toISOString().slice(0, 10);
-    const end   = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - (yearsBack + 2) * 52 * 7);
-
-    const url = `https://api.eia.gov/v2/petroleum/stoc/wstk/data/?` + new URLSearchParams({
-      api_key: API_KEY, frequency: 'weekly', 'data[0]': 'value',
-      'facets[series][]': series, start: toISO(start), end: toISO(end),
-      'sort[0][column]': 'period', 'sort[0][direction]': 'desc', length: 5000, offset: 0,
-    });
-
-    const json = await fetch(url).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+    const { start, end } = dateRange((yearsBack + 2) * 52);
+    const url  = eiaUrl('petroleum/stoc/wstk', { frequency: 'weekly', 'facets[series][]': series, start, end });
+    const json = await apiFetch(url);
     const raw  = json?.response?.data;
     if (!raw?.length) throw new Error('No data returned from EIA.');
-
     cachedData = raw
       .map(d => ({ date: d.period, value: parseFloat(d.value) }))
       .filter(d => !isNaN(d.value))
       .sort((a, b) => a.date.localeCompare(b.date));
-
     renderAll();
-    showInvLoading(false);
-  } catch (err) {
-    showInvError(err.message);
-    showInvLoading(false);
-  }
+    showLoading('inv', false);
+  } catch (e) { showErr('inv', e.message); showLoading('inv', false); }
 }
-
-// ── Inventory: render ─────────────────────────────────────────────────────────
 
 function renderAll() {
   const series    = document.getElementById('seriesSel').value;
   const yearsBack = parseInt(document.getElementById('yearsSel').value, 10);
   const label     = SERIES_LABELS[series] || series;
-  const seasonal  = buildSeasonalData(cachedData, yearsBack);
-  const lastDate  = seasonal.currentYearArr.at(-1)?.date ?? cachedData.at(-1)?.date ?? '';
-
-  const note = `Last updated: ${lastDate} · Source: U.S. EIA`;
+  const s         = buildSeasonalData(cachedData, yearsBack);
+  const lastDate  = s.currentYearArr.at(-1)?.date ?? cachedData.at(-1)?.date ?? '';
+  const note      = `Last updated: ${lastDate} · Source: U.S. EIA`;
   document.getElementById('footerMain').textContent  = note;
   document.getElementById('footerDelta').textContent = note;
-
-  renderDeltaChart(seasonal.currentYearArr);
-  if (chartMode === 'seasonal') renderSeasonalChart(seasonal, label);
+  renderDeltaChart(s.currentYearArr);
+  if (chartMode === 'seasonal') renderSeasonalChart(s, label);
   else renderHistoricChart(cachedData, label, yearsBack);
 }
 
 function buildSeasonalData(data, yearsBack) {
-  const currentYear = new Date().getFullYear();
-  const byYearWeek  = {};
+  const cy = new Date().getFullYear();
+  const byYW = {};
   for (const d of data) {
-    const y  = parseInt(d.date.slice(0, 4));
-    const wi = weekOfYear(d.date);
+    const y = parseInt(d.date.slice(0, 4)), wi = weekOfYear(d.date);
     if (wi < 0 || wi > 51) continue;
-    if (!byYearWeek[y]) byYearWeek[y] = {};
-    byYearWeek[y][wi] = d.value;
+    if (!byYW[y]) byYW[y] = {};
+    byYW[y][wi] = d.value;
   }
-  const prevYears = [];
-  for (let y = currentYear - 1; y >= currentYear - yearsBack; y--) {
-    if (byYearWeek[y]) prevYears.push(y);
-  }
-  const minBand = [], maxBand = [], avgBand = [];
+  const prev = [];
+  for (let y = cy - 1; y >= cy - yearsBack; y--) if (byYW[y]) prev.push(y);
+  const minB = [], maxB = [], avgB = [];
   for (let w = 0; w < 52; w++) {
-    const vals = prevYears.map(y => byYearWeek[y]?.[w]).filter(v => v != null);
-    if (!vals.length) { minBand.push(null); maxBand.push(null); avgBand.push(null); }
+    const vals = prev.map(y => byYW[y]?.[w]).filter(v => v != null);
+    if (!vals.length) { minB.push(null); maxB.push(null); avgB.push(null); }
     else {
-      minBand.push(Math.min(...vals));
-      maxBand.push(Math.max(...vals));
-      avgBand.push(vals.reduce((s, v) => s + v, 0) / vals.length);
+      minB.push(Math.min(...vals));
+      maxB.push(Math.max(...vals));
+      avgB.push(vals.reduce((s, v) => s + v, 0) / vals.length);
     }
   }
-  const currentLine = Array.from({ length: 52 }, (_, w) => byYearWeek[currentYear]?.[w] ?? null);
-  const xLabels = Array.from({ length: 52 }, (_, w) => {
-    const d = new Date(currentYear, 0, 1 + w * 7);
+  const currentLine = Array.from({ length: 52 }, (_, w) => byYW[cy]?.[w] ?? null);
+  const xLabels     = Array.from({ length: 52 }, (_, w) => {
+    const d = new Date(cy, 0, 1 + w * 7);
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   });
-  const currentYearArr = data
-    .filter(d => d.date.startsWith(String(currentYear)))
-    .sort((a, b) => a.date.localeCompare(b.date));
-  return { currentLine, minBand, maxBand, avgBand, xLabels, currentYear, prevYears, currentYearArr };
+  const currentYearArr = data.filter(d => d.date.startsWith(String(cy))).sort((a, b) => a.date.localeCompare(b.date));
+  return { currentLine, minBand: minB, maxBand: maxB, avgBand: avgB, xLabels, currentYear: cy, prevYears: prev, currentYearArr };
 }
 
 function renderSeasonalChart(s, label) {
   const canvas = document.getElementById('mainChart');
   canvas.style.display = 'block';
   const yFrom = s.prevYears.at(-1) ?? '', yTo = s.prevYears[0] ?? '';
-  const unit = unitMode === 'days' ? ' (days of supply)' : ' (thousand bbl)';
+  const unit  = unitMode === 'days' ? ' (days of supply)' : ' (million bbl)';
   document.getElementById('chartTitle').textContent =
     `${label}${unit} — ${s.currentYear} vs. historical band (${yFrom}–${yTo})`;
   if (mainChart) mainChart.destroy();
@@ -556,49 +571,26 @@ function renderSeasonalChart(s, label) {
       labels: s.xLabels,
       datasets: [
         { label: `Max ${yFrom}–${yTo}`, data: convertArr(s.maxBand), borderColor: 'rgba(148,163,184,0.4)', backgroundColor: 'rgba(100,116,139,0.18)', borderWidth: 1, fill: '+1', pointRadius: 0, tension: 0.4, order: 2 },
-        { label: `Min ${yFrom}–${yTo}`, data: convertArr(s.minBand), borderColor: 'rgba(148,163,184,0.4)', backgroundColor: 'transparent',              borderWidth: 1, fill: false,  pointRadius: 0, tension: 0.4, order: 2 },
+        { label: `Min ${yFrom}–${yTo}`, data: convertArr(s.minBand), borderColor: 'rgba(148,163,184,0.4)', backgroundColor: 'transparent', borderWidth: 1, fill: false, pointRadius: 0, tension: 0.4, order: 2 },
         { label: String(s.currentYear), data: convertArr(s.currentLine), borderColor: '#f97316', backgroundColor: 'transparent', borderWidth: 2.5, fill: false, pointRadius: 3, pointHoverRadius: 6, tension: 0.3, spanGaps: false, order: 1 },
       ],
     },
-    options: {
-      ...CHART_DEFAULTS,
-      plugins: {
-        legend: { labels: { color: '#94a3b8', font: { size: 12 }, filter: i => i.datasetIndex !== 1 } },
-        tooltip: { callbacks: { label: ctx => ctx.parsed.y == null ? null : ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)} ${unitLabel()}` } },
-      },
-      scales: {
-        x: CHART_DEFAULTS.scales.x,
-        y: { ...CHART_DEFAULTS.scales.y, ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => fmt(v) } },
-      },
-    },
+    options: { ...BASE_OPT, plugins: { legend: { ...LEGEND, labels: { ...LEGEND.labels, filter: i => i.datasetIndex !== 1 } }, tooltip: { callbacks: { label: ctx => ctx.parsed.y == null ? null : ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)} ${unitLabel()}` } } }, scales: { x: XSCALE, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmt(v) } } } },
   });
 }
 
 function renderHistoricChart(data, label, yearsBack) {
-  const canvas = document.getElementById('mainChart');
+  const canvas  = document.getElementById('mainChart');
   canvas.style.display = 'block';
-  const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - yearsBack);
+  const cutoff  = new Date(); cutoff.setFullYear(cutoff.getFullYear() - yearsBack);
   const visible = data.filter(d => d.date >= cutoff.toISOString().slice(0, 10));
-  const unit = unitMode === 'days' ? ' (days of supply)' : ' (thousand bbl)';
+  const unit    = unitMode === 'days' ? ' (days of supply)' : ' (million bbl)';
   document.getElementById('chartTitle').textContent = `${label}${unit} — last ${yearsBack} years`;
   if (mainChart) mainChart.destroy();
   mainChart = new Chart(canvas, {
     type: 'line',
-    data: {
-      labels: visible.map(d => d.date),
-      datasets: [{ label, data: visible.map(d => unitMode === 'days' ? toDays(d.value) : d.value / 1000), borderColor: '#4f6ef7', backgroundColor: 'rgba(79,110,247,0.1)', fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2 }],
-    },
-    options: {
-      ...CHART_DEFAULTS,
-      plugins: {
-        legend: { labels: { color: '#94a3b8', font: { size: 12 } } },
-        tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)} ${unitLabel()}` } },
-      },
-      scales: {
-        x: CHART_DEFAULTS.scales.x,
-        y: { ...CHART_DEFAULTS.scales.y, ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => fmt(v) } },
-      },
-    },
+    data: { labels: visible.map(d => d.date), datasets: [{ label, data: visible.map(d => unitMode === 'days' ? toDays(d.value) : d.value / 1000), borderColor: '#4f6ef7', backgroundColor: 'rgba(79,110,247,0.1)', fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2 }] },
+    options: { ...BASE_OPT, plugins: { legend: LEGEND, tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)} ${unitLabel()}` } } }, scales: { x: XSCALE, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmt(v) } } } },
   });
 }
 
@@ -610,210 +602,172 @@ function renderDeltaChart(data) {
   for (let i = 1; i < data.length; i++) {
     const raw = data[i].value - data[i - 1].value;
     const d   = unitMode === 'days' ? toDays(raw) : raw / 1000;
-    labels.push(data[i].date);
-    deltas.push(d);
+    labels.push(data[i].date); deltas.push(d);
     colors.push(d >= 0 ? 'rgba(74,222,128,0.75)' : 'rgba(248,113,113,0.75)');
   }
   deltaChart = new Chart(canvas, {
     type: 'bar',
     data: { labels, datasets: [{ data: deltas, backgroundColor: colors, borderWidth: 0 }] },
-    options: {
-      ...CHART_DEFAULTS,
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: ctx => ` ${sign(ctx.parsed.y)}${fmt(ctx.parsed.y)} ${unitLabel()}` } },
-      },
-      scales: {
-        x: { ...CHART_DEFAULTS.scales.x, ticks: { ...CHART_DEFAULTS.scales.x.ticks, maxTicksLimit: 14 }, grid: { display: false } },
-        y: { ...CHART_DEFAULTS.scales.y, ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => fmt(v) } },
-      },
-    },
+    options: { ...BASE_OPT, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${sign(ctx.parsed.y)}${fmt(ctx.parsed.y)} ${unitLabel()}` } } }, scales: { x: { ...XSCALE, ticks: { ...XSCALE.ticks, maxTicksLimit: 14 }, grid: { display: false } }, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmt(v) } } } },
   });
 }
 
-// ── Flows: fetch ──────────────────────────────────────────────────────────────
+// ── Flows ─────────────────────────────────────────────────────────────────────
 
 async function loadFlows() {
   const productKey = document.getElementById('flowProductSel').value;
   const weeks      = parseInt(document.getElementById('flowPeriodSel').value, 10);
   const product    = FLOW_PRODUCTS[productKey];
-
-  hideFlowError();
-  showFlowLoading(true);
-
+  hideErr('flow'); showLoading('flow', true);
   try {
-    let bySeriesId;
-
-    if (product.lngMode) {
-      bySeriesId = await fetchLng(weeks);
-    } else {
-      bySeriesId = await fetchPetroleumFlows(product, weeks);
-    }
-
-    renderFlowsChart(bySeriesId, product, weeks);
-    showFlowLoading(false);
-  } catch (err) {
-    showFlowError(err.message);
-    showFlowLoading(false);
-  }
+    const byId = product.lngMode
+      ? await fetchLng(weeks)
+      : await fetchPetroleumFlows(product, weeks);
+    renderFlowsChart(byId, product);
+    showLoading('flow', false);
+  } catch (e) { showErr('flow', e.message); showLoading('flow', false); }
 }
 
 async function fetchPetroleumFlows(product, weeks) {
-  const toISO = d => d.toISOString().slice(0, 10);
-  const end   = new Date();
-  const start = new Date(); start.setDate(start.getDate() - weeks * 7);
-
-  const params = new URLSearchParams({
-    api_key: API_KEY, frequency: 'weekly', 'data[0]': 'value',
-    start: toISO(start), end: toISO(end),
-    'sort[0][column]': 'period', 'sort[0][direction]': 'desc', length: 5000, offset: 0,
-  });
-  product.series.forEach(s => params.append('facets[series][]', s.id));
-
-  const url  = `https://api.eia.gov/v2/${product.endpoint}/data/?${params}`;
-  const json = await fetch(url).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+  const { start, end } = dateRange(weeks);
+  const params = { frequency: 'weekly', start, end };
+  const urlParams = new URLSearchParams({ api_key: API_KEY, 'data[0]': 'value', 'sort[0][column]': 'period', 'sort[0][direction]': 'desc', length: 5000, offset: 0, frequency: 'weekly', start, end });
+  product.series.forEach(s => urlParams.append('facets[series][]', s.id));
+  const url  = `https://api.eia.gov/v2/${product.endpoint}/data/?${urlParams}`;
+  const json = await apiFetch(url);
   const raw  = json?.response?.data;
   if (!raw?.length) throw new Error('No flow data returned from EIA.');
-
-  const bySeriesId = {};
+  const byId = {};
   for (const row of raw) {
     const v = parseFloat(row.value);
     if (isNaN(v)) continue;
-    if (!bySeriesId[row.series]) bySeriesId[row.series] = [];
-    bySeriesId[row.series].push({ date: row.period, value: v });
+    if (!byId[row.series]) byId[row.series] = [];
+    byId[row.series].push({ date: row.period, value: v });
   }
-  for (const id of Object.keys(bySeriesId)) {
-    bySeriesId[id].sort((a, b) => a.date.localeCompare(b.date));
-  }
-  return bySeriesId;
+  for (const id of Object.keys(byId)) byId[id].sort((a, b) => a.date.localeCompare(b.date));
+  return byId;
 }
 
 async function fetchLng(weeks) {
-  const toISO = d => d.toISOString().slice(0, 10);
-  const end   = new Date();
-  const start = new Date(); start.setDate(start.getDate() - weeks * 7);
+  // LNG data is available monthly via natural-gas/move/lngex
+  const months = Math.max(12, Math.round(weeks * 12 / 52));
+  const end    = new Date();
+  const start  = new Date(); start.setMonth(start.getMonth() - months);
+  const toISO  = d => d.toISOString().slice(0, 10);
 
-  // LNG exports and imports via the natural-gas/move/lngex endpoint
-  const params = new URLSearchParams({
-    api_key: API_KEY, frequency: 'weekly', 'data[0]': 'value',
+  const urlParams = new URLSearchParams({
+    api_key: API_KEY, 'data[0]': 'value', frequency: 'monthly',
     start: toISO(start), end: toISO(end),
     'sort[0][column]': 'period', 'sort[0][direction]': 'desc', length: 5000, offset: 0,
   });
-
-  const url  = `https://api.eia.gov/v2/natural-gas/move/lngex/data/?${params}`;
-  const json = await fetch(url).then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+  const url  = `https://api.eia.gov/v2/natural-gas/move/lngex/data/?${urlParams}`;
+  const json = await apiFetch(url);
   const raw  = json?.response?.data;
-  if (!raw?.length) throw new Error('No LNG data returned from EIA. The weekly LNG series may require different parameters.');
+  if (!raw?.length) throw new Error('No LNG data returned from EIA.');
 
-  // Aggregate all LNG flows into exports/imports by movetype
+  // Aggregate rows by period into exports vs imports based on movetype
   const byType = {};
   for (const row of raw) {
     const v = parseFloat(row.value);
     if (isNaN(v)) continue;
-    const key = (row.movetype || row.series || 'LNG').toLowerCase().includes('import') ? 'LNG_IMPORTS' : 'LNG_EXPORTS';
+    const mv  = (row.movetype ?? row.type ?? '').toLowerCase();
+    const key = mv.includes('import') ? 'LNG_IMPORTS' : 'LNG_EXPORTS';
     if (!byType[key]) byType[key] = {};
-    const date = row.period;
-    byType[key][date] = (byType[key][date] ?? 0) + v;
+    byType[key][row.period] = (byType[key][row.period] ?? 0) + v;
   }
-
-  const bySeriesId = {};
-  for (const [key, dateMap] of Object.entries(byType)) {
-    bySeriesId[key] = Object.entries(dateMap)
-      .map(([date, value]) => ({ date, value }))
-      .sort((a, b) => a.date.localeCompare(b.date));
+  const byId = {};
+  for (const [key, map] of Object.entries(byType)) {
+    byId[key] = Object.entries(map).map(([date, value]) => ({ date, value })).sort((a, b) => a.date.localeCompare(b.date));
   }
-  return bySeriesId;
+  if (!Object.keys(byId).length) throw new Error('LNG data returned but could not be parsed. Check EIA series availability.');
+  return byId;
 }
 
-// ── Flows: render ─────────────────────────────────────────────────────────────
-
-function renderFlowsChart(bySeriesId, product, weeks) {
+function renderFlowsChart(byId, product) {
   const canvas = document.getElementById('flowChart');
   canvas.style.display = 'block';
-
-  document.getElementById('flowChartTitle').textContent =
-    `${product.label} — Weekly Flows (${product.unit})`;
-
-  // Collect union of all dates
   const dateSet = new Set();
-  for (const arr of Object.values(bySeriesId)) arr.forEach(d => dateSet.add(d.date));
+  for (const arr of Object.values(byId)) arr.forEach(d => dateSet.add(d.date));
   const dates = [...dateSet].sort();
-
   if (!dates.length) throw new Error('No data points to display.');
-
-  // Last update footnote
-  document.getElementById('footerFlow').textContent =
-    `Last updated: ${dates.at(-1)} · Source: U.S. EIA`;
-
-  const datasets = product.series
-    .filter(s => bySeriesId[s.id]?.length)
-    .map(s => {
-      const lookup = Object.fromEntries(bySeriesId[s.id].map(d => [d.date, d.value]));
-      return {
-        label: s.label,
-        data: dates.map(d => lookup[d] ?? null),
-        borderColor: s.color,
-        backgroundColor: 'transparent',
-        borderWidth: 2,
-        borderDash: s.dash,
-        pointRadius: dates.length > 100 ? 0 : 2,
-        pointHoverRadius: 5,
-        tension: 0.3,
-        spanGaps: false,
-      };
-    });
-
-  if (!datasets.length) throw new Error('None of the expected series were found in the API response.');
-
+  document.getElementById('flowChartTitle').textContent = `${product.label} — Flows (${product.unit})`;
+  document.getElementById('footerFlow').textContent = `Last updated: ${dates.at(-1)} · Source: U.S. EIA`;
+  const datasets = product.series.filter(s => byId[s.id]?.length).map(s => {
+    const lookup = Object.fromEntries(byId[s.id].map(d => [d.date, d.value]));
+    return { label: s.label, data: dates.map(d => lookup[d] ?? null), borderColor: s.color, backgroundColor: 'transparent', borderWidth: 2, borderDash: s.dash, pointRadius: dates.length > 150 ? 0 : 2, pointHoverRadius: 5, tension: 0.3, spanGaps: false };
+  });
+  if (!datasets.length) throw new Error('None of the expected series found in the API response.');
   if (flowChart) flowChart.destroy();
   flowChart = new Chart(canvas, {
     type: 'line',
     data: { labels: dates, datasets },
-    options: {
-      ...CHART_DEFAULTS,
-      plugins: {
-        legend: { labels: { color: '#94a3b8', font: { size: 12 } } },
-        tooltip: {
-          callbacks: {
-            label: ctx => {
-              const v = ctx.parsed.y;
-              if (v == null) return null;
-              return ` ${ctx.dataset.label}: ${fmtN(v, 0)} ${product.unit}`;
-            },
-          },
-        },
-      },
-      scales: {
-        x: CHART_DEFAULTS.scales.x,
-        y: { ...CHART_DEFAULTS.scales.y, ticks: { ...CHART_DEFAULTS.scales.y.ticks, callback: v => fmtN(v, 0) } },
-      },
-    },
+    options: { ...BASE_OPT, plugins: { legend: LEGEND, tooltip: { callbacks: { label: ctx => ctx.parsed.y == null ? null : ` ${ctx.dataset.label}: ${fmtN(ctx.parsed.y, 0)} ${product.unit}` } } }, scales: { x: XSCALE, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmtN(v, 0) } } } },
   });
 }
 
-// ── Loading / error helpers ───────────────────────────────────────────────────
+// ── Prices ────────────────────────────────────────────────────────────────────
 
-function showInvLoading(on) {
-  document.getElementById('loadingMsg').style.display = on ? 'block' : 'none';
-  if (on) { document.getElementById('mainChart').style.display = 'none'; document.getElementById('deltaChart').style.display = 'none'; }
+async function loadPrices() {
+  const groupKey = document.getElementById('priceGroupSel').value;
+  const weeks    = parseInt(document.getElementById('pricePeriodSel').value, 10);
+  const group    = PRICE_GROUPS[groupKey];
+  hideErr('price'); showLoading('price', true);
+  try {
+    const { start, end } = dateRange(weeks);
+    // Fetch each series (may be from different endpoints) in parallel
+    const results = await Promise.all(group.series.map(async s => {
+      const url  = eiaUrl(s.endpoint, { frequency: s.freq, 'facets[series][]': s.id, start, end });
+      const json = await apiFetch(url);
+      const raw  = (json?.response?.data ?? [])
+        .map(d => ({ date: d.period, value: parseFloat(d.value) }))
+        .filter(d => !isNaN(d.value))
+        .sort((a, b) => a.date.localeCompare(b.date));
+      return { series: s, data: raw };
+    }));
+    renderPricesChart(results, group);
+    showLoading('price', false);
+  } catch (e) { showErr('price', e.message); showLoading('price', false); }
 }
 
-function showFlowLoading(on) {
-  document.getElementById('flowLoadingMsg').style.display = on ? 'block' : 'none';
-  if (on) document.getElementById('flowChart').style.display = 'none';
+function renderPricesChart(results, group) {
+  const canvas = document.getElementById('priceChart');
+  canvas.style.display = 'block';
+  // Union of dates
+  const dateSet = new Set();
+  results.forEach(r => r.data.forEach(d => dateSet.add(d.date)));
+  const dates = [...dateSet].sort();
+  if (!dates.length) throw new Error('No price data to display.');
+  const lastDate = dates.at(-1);
+  document.getElementById('priceChartTitle').textContent = `${group.title} (${group.unit})`;
+  document.getElementById('footerPrice').textContent = `Last updated: ${lastDate} · Source: U.S. EIA`;
+  const datasets = results.filter(r => r.data.length).map(r => {
+    const lookup = Object.fromEntries(r.data.map(d => [d.date, d.value]));
+    return { label: r.series.label, data: dates.map(d => lookup[d] ?? null), borderColor: r.series.color, backgroundColor: 'transparent', borderWidth: 2, pointRadius: dates.length > 150 ? 0 : 2, pointHoverRadius: 5, tension: 0.3, spanGaps: false };
+  });
+  if (!datasets.length) throw new Error('No price series available for this group.');
+  if (priceChart) priceChart.destroy();
+  priceChart = new Chart(canvas, {
+    type: 'line',
+    data: { labels: dates, datasets },
+    options: { ...BASE_OPT, plugins: { legend: LEGEND, tooltip: { callbacks: { label: ctx => ctx.parsed.y == null ? null : ` ${ctx.dataset.label}: ${fmtN(ctx.parsed.y, 2)} ${group.unit}` } } }, scales: { x: XSCALE, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmtN(v, 2) } } } },
+  });
 }
 
-function showInvError(msg) {
-  const el = document.getElementById('invErrorBox');
+// ── Loading / error ───────────────────────────────────────────────────────────
+
+function showLoading(view, on) {
+  const ids = { inv: ['loadingMsg', 'mainChart', 'deltaChart'], flow: ['flowLoadingMsg', 'flowChart'], price: ['priceLoadingMsg', 'priceChart'] };
+  const [spinner, ...canvases] = ids[view];
+  document.getElementById(spinner).style.display = on ? 'block' : 'none';
+  if (on) canvases.forEach(id => { document.getElementById(id).style.display = 'none'; });
+}
+
+function showErr(view, msg) {
+  const el = document.getElementById(`${view}ErrorBox`);
   el.className = 'error-box'; el.textContent = `Error: ${msg}`; el.style.display = 'block';
 }
-function hideInvError() { document.getElementById('invErrorBox').style.display = 'none'; }
 
-function showFlowError(msg) {
-  const el = document.getElementById('flowErrorBox');
-  el.className = 'error-box'; el.textContent = `Error: ${msg}`; el.style.display = 'block';
-}
-function hideFlowError() { document.getElementById('flowErrorBox').style.display = 'none'; }
+function hideErr(view) { document.getElementById(`${view}ErrorBox`).style.display = 'none'; }
 
 window.addEventListener('DOMContentLoaded', loadData);
 </script>
