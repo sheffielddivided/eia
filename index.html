@@ -411,7 +411,7 @@ const PRICE_GROUPS = {
     title: 'Natural Gas — Henry Hub (NYMEX front month)',
     unit: '$/MMBtu',
     series: [
-      { id: 'RNGC1', label: 'Henry Hub', endpoint: 'natural-gas/pri/fut', color: '#a78bfa', freq: 'weekly' },
+      { id: 'RNGC1', label: 'Henry Hub', endpoint: 'natural-gas/pri/fut', color: '#a78bfa', freq: 'weekly', facets: {} },
     ],
   },
 };
@@ -713,13 +713,14 @@ async function loadPrices() {
   hideErr('price'); showLoading('price', true);
   try {
     const { start, end } = dateRange(weeks);
-    // Fetch each series (may be from different endpoints) in parallel
     const results = await Promise.all(group.series.map(async s => {
-      const facetParams = s.facets ?? { 'facets[series][]': s.id };
+      // Some endpoints (e.g. natural-gas/pri/fut) accept no facets — use empty {}
+      const facetParams = s.facets !== undefined ? s.facets : { 'facets[series][]': s.id };
       const url  = eiaUrl(s.endpoint, { frequency: s.freq, ...facetParams, start, end });
       const json = await apiFetch(url);
-      const today = new Date().toISOString().slice(0, 7); // cap at current month
+      const today = new Date().toISOString().slice(0, 7);
       const raw  = (json?.response?.data ?? [])
+        .filter(d => !s.id || !d.series || d.series === s.id) // client-side series filter
         .map(d => ({ date: d.period, value: parseFloat(d.value) }))
         .filter(d => !isNaN(d.value) && d.date <= today)
         .sort((a, b) => a.date.localeCompare(b.date));
