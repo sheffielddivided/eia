@@ -21,18 +21,26 @@
     header {
       background: #1a1d27;
       border-bottom: 1px solid #2d3148;
-      padding: 0.85rem 2rem;
+      padding: 0.7rem 2rem;
       display: flex;
       align-items: center;
-      gap: 0.85rem;
+      gap: 0.7rem;
     }
 
-    .logo { display: flex; align-items: center; gap: 0.6rem; text-decoration: none; }
-    .logo svg { width: 34px; height: 34px; flex-shrink: 0; }
-    .logo-text { display: flex; flex-direction: column; line-height: 1.15; }
-    .logo-text strong { font-size: 1.05rem; font-weight: 700; color: #f1f5f9; letter-spacing: 0.01em; }
-    .logo-text span { font-size: 0.7rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; }
-    header .source { font-size: 0.78rem; color: #475569; margin-left: auto; }
+    .site-title { font-size: 0.95rem; font-weight: 600; color: #f1f5f9; }
+
+    /* ── footer ── */
+    .site-footer {
+      text-align: center;
+      padding: 1.5rem 2rem;
+      color: #475569;
+      font-size: 0.78rem;
+      border-top: 1px solid #1e2235;
+      margin-top: 0.5rem;
+    }
+
+    .site-footer a { color: #60a5fa; text-decoration: none; }
+    .site-footer a:hover { text-decoration: underline; }
 
     /* ── view nav ── */
     .view-nav {
@@ -166,28 +174,22 @@
 <body>
 
 <header>
-  <a class="logo" href="#">
-    <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-      <rect x="7" y="9" width="26" height="22" rx="4" fill="#1e3a8a"/>
-      <ellipse cx="20" cy="9" rx="13" ry="4.5" fill="#3b5bdb"/>
-      <ellipse cx="20" cy="31" rx="13" ry="4.5" fill="#3b5bdb"/>
-      <rect x="7" y="9" width="26" height="22" rx="4" fill="url(#barrelGrad)"/>
-      <line x1="7" y1="16.5" x2="33" y2="16.5" stroke="#60a5fa" stroke-width="1.8" opacity="0.7"/>
-      <line x1="7" y1="23.5" x2="33" y2="23.5" stroke="#60a5fa" stroke-width="1.8" opacity="0.7"/>
-      <defs>
-        <linearGradient id="barrelGrad" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%"   stop-color="#1e3a8a"/>
-          <stop offset="50%"  stop-color="#2d4fc4"/>
-          <stop offset="100%" stop-color="#1e3a8a"/>
-        </linearGradient>
-      </defs>
-    </svg>
-    <div class="logo-text">
-      <strong>U.S. Oil Inventory</strong>
-      <span>EIA Weekly Data</span>
-    </div>
-  </a>
-  <span class="source">Source: U.S. Energy Information Administration</span>
+  <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" style="width:26px;height:26px;flex-shrink:0">
+    <rect x="7" y="9" width="26" height="22" rx="4" fill="#1e3a8a"/>
+    <ellipse cx="20" cy="9" rx="13" ry="4.5" fill="#3b5bdb"/>
+    <ellipse cx="20" cy="31" rx="13" ry="4.5" fill="#3b5bdb"/>
+    <rect x="7" y="9" width="26" height="22" rx="4" fill="url(#barrelGrad)"/>
+    <line x1="7" y1="16.5" x2="33" y2="16.5" stroke="#60a5fa" stroke-width="1.8" opacity="0.7"/>
+    <line x1="7" y1="23.5" x2="33" y2="23.5" stroke="#60a5fa" stroke-width="1.8" opacity="0.7"/>
+    <defs>
+      <linearGradient id="barrelGrad" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0%"   stop-color="#1e3a8a"/>
+        <stop offset="50%"  stop-color="#2d4fc4"/>
+        <stop offset="100%" stop-color="#1e3a8a"/>
+      </linearGradient>
+    </defs>
+  </svg>
+  <span class="site-title">U.S. Oil Inventories — EIA Weekly Data</span>
 </header>
 
 <nav class="view-nav">
@@ -284,6 +286,10 @@
 
 </main>
 
+<footer class="site-footer">
+  Data: <a href="https://www.eia.gov/petroleum/supply/weekly/" target="_blank" rel="noopener noreferrer">U.S. Energy Information Administration — Weekly Petroleum Status Report</a>
+</footer>
+
 <script>
 const API_KEY = 'dmZglvmWG86ewOel1qYABoroVEnhGjUNTiHU4Rki';
 
@@ -311,10 +317,10 @@ const FLOW_PRODUCTS = {
     endpoint: 'petroleum/sum/sndw',
     unit: 'thousand bbl/day',
     series: [
-      { id: 'WCRFPUS2', label: 'Production',      color: '#4ade80', dash: [] },
-      { id: 'WCRIMUS2', label: 'Imports',          color: '#60a5fa', dash: [] },
-      { id: 'WCREXUS2', label: 'Exports',          color: '#fb923c', dash: [] },
-      { id: 'WCRRIUS2', label: 'Refinery Input',   color: '#f87171', dash: [5,3] },
+      { id: 'WCRFPUS2', label: 'Production',      color: '#22c55e', dash: [] },
+      { id: 'WCRIMUS2', label: 'Imports',          color: '#38bdf8', dash: [] },
+      { id: 'WCREXUS2', label: 'Exports',          color: '#f97316', dash: [] },
+      { id: 'WCRRIUS2', label: 'Refinery Input',   color: '#e879f9', dash: [5,3] },
     ],
   },
   gasoline: {
@@ -322,10 +328,10 @@ const FLOW_PRODUCTS = {
     endpoint: 'petroleum/sum/sndw',
     unit: 'thousand bbl/day',
     series: [
-      { id: 'WGFRPUS2', label: 'Production',       color: '#4ade80', dash: [] },
-      { id: 'WGFIMUS2', label: 'Imports',           color: '#60a5fa', dash: [] },
-      { id: 'WGFEXUS2', label: 'Exports',           color: '#fb923c', dash: [] },
-      { id: 'WGFUPUS2', label: 'Product Supplied',  color: '#f87171', dash: [5,3] },
+      { id: 'WGFRPUS2', label: 'Production',       color: '#22c55e', dash: [] },
+      { id: 'WGFIMUS2', label: 'Imports',           color: '#38bdf8', dash: [] },
+      { id: 'WGFEXUS2', label: 'Exports',           color: '#f97316', dash: [] },
+      { id: 'WGFUPUS2', label: 'Product Supplied',  color: '#e879f9', dash: [5,3] },
     ],
   },
   distillate: {
@@ -333,10 +339,10 @@ const FLOW_PRODUCTS = {
     endpoint: 'petroleum/sum/sndw',
     unit: 'thousand bbl/day',
     series: [
-      { id: 'WDIRPUS2', label: 'Production',       color: '#4ade80', dash: [] },
-      { id: 'WDIIMUS2', label: 'Imports',           color: '#60a5fa', dash: [] },
-      { id: 'WDIEXUS2', label: 'Exports',           color: '#fb923c', dash: [] },
-      { id: 'WDIUPUS2', label: 'Product Supplied',  color: '#f87171', dash: [5,3] },
+      { id: 'WDIRPUS2', label: 'Production',       color: '#22c55e', dash: [] },
+      { id: 'WDIIMUS2', label: 'Imports',           color: '#38bdf8', dash: [] },
+      { id: 'WDIEXUS2', label: 'Exports',           color: '#f97316', dash: [] },
+      { id: 'WDIUPUS2', label: 'Product Supplied',  color: '#e879f9', dash: [5,3] },
     ],
   },
   jetfuel: {
@@ -344,10 +350,10 @@ const FLOW_PRODUCTS = {
     endpoint: 'petroleum/sum/sndw',
     unit: 'thousand bbl/day',
     series: [
-      { id: 'WKJRPUS2', label: 'Production',       color: '#4ade80', dash: [] },
-      { id: 'WKJIMUS2', label: 'Imports',           color: '#60a5fa', dash: [] },
-      { id: 'WKJEXUS2', label: 'Exports',           color: '#fb923c', dash: [] },
-      { id: 'WKJUPUS2', label: 'Product Supplied',  color: '#f87171', dash: [5,3] },
+      { id: 'WKJRPUS2', label: 'Production',       color: '#22c55e', dash: [] },
+      { id: 'WKJIMUS2', label: 'Imports',           color: '#38bdf8', dash: [] },
+      { id: 'WKJEXUS2', label: 'Exports',           color: '#f97316', dash: [] },
+      { id: 'WKJUPUS2', label: 'Product Supplied',  color: '#e879f9', dash: [5,3] },
     ],
   },
   lng: {
@@ -356,8 +362,8 @@ const FLOW_PRODUCTS = {
     unit: 'MMcf/day',
     lngMode: true,
     series: [
-      { id: 'LNG_EXPORTS', label: 'Exports',  color: '#fb923c', dash: [] },
-      { id: 'LNG_IMPORTS', label: 'Imports',  color: '#60a5fa', dash: [] },
+      { id: 'LNG_EXPORTS', label: 'Exports',  color: '#f97316', dash: [] },
+      { id: 'LNG_IMPORTS', label: 'Imports',  color: '#38bdf8', dash: [] },
     ],
   },
 };
@@ -379,8 +385,9 @@ function fmtN(n, decimals = 0) {
   return n.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
-function fmt(n) { return unitMode === 'days' ? fmtN(n, 1) : fmtN(n, 0); }
-function unitLabel() { return unitMode === 'days' ? 'days' : 'thousand bbl'; }
+// Inventory values from EIA are in thousand bbl; display as million bbl
+function fmt(n) { return fmtN(unitMode === 'days' ? n : n, 1); }
+function unitLabel() { return unitMode === 'days' ? 'days' : 'million bbl'; }
 function sign(n) { return n >= 0 ? '+' : ''; }
 
 function toDays(v) {
@@ -389,7 +396,8 @@ function toDays(v) {
 }
 
 function convertArr(arr) {
-  return unitMode === 'days' ? arr.map(v => (v == null ? null : toDays(v))) : arr;
+  if (unitMode === 'days') return arr.map(v => (v == null ? null : toDays(v)));
+  return arr.map(v => (v == null ? null : v / 1000));
 }
 
 function weekOfYear(dateStr) {
@@ -547,9 +555,9 @@ function renderSeasonalChart(s, label) {
     data: {
       labels: s.xLabels,
       datasets: [
-        { label: `Max ${yFrom}–${yTo}`, data: convertArr(s.maxBand), borderColor: 'rgba(99,130,220,0.3)', backgroundColor: 'rgba(79,110,247,0.15)', borderWidth: 1, fill: '+1', pointRadius: 0, tension: 0.4, order: 2 },
-        { label: `Min ${yFrom}–${yTo}`, data: convertArr(s.minBand), borderColor: 'rgba(99,130,220,0.3)', backgroundColor: 'transparent',             borderWidth: 1, fill: false,  pointRadius: 0, tension: 0.4, order: 2 },
-        { label: String(s.currentYear), data: convertArr(s.currentLine), borderColor: '#fb923c', backgroundColor: 'transparent', borderWidth: 2.5, fill: false, pointRadius: 3, pointHoverRadius: 6, tension: 0.3, spanGaps: false, order: 1 },
+        { label: `Max ${yFrom}–${yTo}`, data: convertArr(s.maxBand), borderColor: 'rgba(148,163,184,0.4)', backgroundColor: 'rgba(100,116,139,0.18)', borderWidth: 1, fill: '+1', pointRadius: 0, tension: 0.4, order: 2 },
+        { label: `Min ${yFrom}–${yTo}`, data: convertArr(s.minBand), borderColor: 'rgba(148,163,184,0.4)', backgroundColor: 'transparent',              borderWidth: 1, fill: false,  pointRadius: 0, tension: 0.4, order: 2 },
+        { label: String(s.currentYear), data: convertArr(s.currentLine), borderColor: '#f97316', backgroundColor: 'transparent', borderWidth: 2.5, fill: false, pointRadius: 3, pointHoverRadius: 6, tension: 0.3, spanGaps: false, order: 1 },
       ],
     },
     options: {
@@ -578,7 +586,7 @@ function renderHistoricChart(data, label, yearsBack) {
     type: 'line',
     data: {
       labels: visible.map(d => d.date),
-      datasets: [{ label, data: visible.map(d => unitMode === 'days' ? toDays(d.value) : d.value), borderColor: '#4f6ef7', backgroundColor: 'rgba(79,110,247,0.1)', fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2 }],
+      datasets: [{ label, data: visible.map(d => unitMode === 'days' ? toDays(d.value) : d.value / 1000), borderColor: '#4f6ef7', backgroundColor: 'rgba(79,110,247,0.1)', fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2 }],
     },
     options: {
       ...CHART_DEFAULTS,
@@ -601,7 +609,7 @@ function renderDeltaChart(data) {
   const labels = [], deltas = [], colors = [];
   for (let i = 1; i < data.length; i++) {
     const raw = data[i].value - data[i - 1].value;
-    const d   = unitMode === 'days' ? toDays(raw) : raw;
+    const d   = unitMode === 'days' ? toDays(raw) : raw / 1000;
     labels.push(data[i].date);
     deltas.push(d);
     colors.push(d >= 0 ? 'rgba(74,222,128,0.75)' : 'rgba(248,113,113,0.75)');
