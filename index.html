@@ -228,12 +228,11 @@
       <option value="WCRFPUS2">Raffinerikapasitet i drift</option>
     </select>
 
-    <label for="periodSel">Periode:</label>
-    <select id="periodSel">
-      <option value="52">1 år</option>
-      <option value="104" selected>2 år</option>
-      <option value="260">5 år</option>
-      <option value="520">10 år</option>
+    <label for="bandSel">Historisk band:</label>
+    <select id="bandSel">
+      <option value="3">3 år</option>
+      <option value="5" selected>5 år</option>
+      <option value="10">10 år</option>
     </select>
 
     <button class="primary" id="fetchBtn" onclick="loadData()">Hent data</button>
@@ -244,8 +243,8 @@
   <div class="grid" id="statsGrid">
     <div class="stat-card"><div class="label">Siste verdi</div><div class="value" id="statLast">—</div><div class="sub flat" id="statDate">laster…</div></div>
     <div class="stat-card"><div class="label">Endring uke/uke</div><div class="value" id="statWow">—</div><div class="sub flat" id="statWowPct"></div></div>
-    <div class="stat-card"><div class="label">52-ukers snitt</div><div class="value" id="statAvg">—</div><div class="sub flat" id="statAvgDiff"></div></div>
-    <div class="stat-card"><div class="label">52-ukers rekord</div><div class="value" id="statMax">—</div><div class="sub flat" id="statMin"></div></div>
+    <div class="stat-card"><div class="label">vs. historisk snitt</div><div class="value" id="statAvg">—</div><div class="sub flat" id="statAvgDiff"></div></div>
+    <div class="stat-card"><div class="label">Historisk band (siste uke)</div><div class="value" id="statMax">—</div><div class="sub flat" id="statMin"></div></div>
   </div>
 
   <div class="chart-card">
@@ -295,17 +294,26 @@ function sign(n) {
   return n >= 0 ? '+' : '';
 }
 
+// Returns week-of-year index 0–51 for a YYYY-MM-DD string
+function weekOfYear(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  const jan1 = new Date(y, 0, 1);
+  return Math.floor((date - jan1) / (7 * 24 * 60 * 60 * 1000));
+}
+
 async function loadData() {
-  const series   = document.getElementById('seriesSel').value;
-  const weeks    = parseInt(document.getElementById('periodSel').value, 10);
-  const btn      = document.getElementById('fetchBtn');
+  const series  = document.getElementById('seriesSel').value;
+  const yearsBack = parseInt(document.getElementById('bandSel').value, 10);
+  const btn     = document.getElementById('fetchBtn');
 
   btn.disabled = true;
   showLoading(true);
   hideError();
 
   try {
-    const url = buildUrl(series, weeks);
+    // Fetch enough data to cover current year + yearsBack previous years
+    const url = buildUrl(series, (yearsBack + 2) * 52);
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const json = await resp.json();
@@ -313,16 +321,16 @@ async function loadData() {
     const raw = json?.response?.data;
     if (!raw || raw.length === 0) throw new Error('Ingen data returnert fra EIA.');
 
-    // Sort ascending by date
     const data = raw
       .map(d => ({ date: d.period, value: parseFloat(d.value) }))
       .filter(d => !isNaN(d.value))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    renderStats(data);
-    renderMainChart(data, SERIES_LABELS[series] || series);
-    renderDeltaChart(data);
-    renderTable(data);
+    const seasonal = buildSeasonalData(data, yearsBack);
+    renderStats(seasonal);
+    renderSeasonalChart(seasonal, SERIES_LABELS[series] || series);
+    renderDeltaChart(seasonal.currentYearArr);
+    renderTable(seasonal.currentYearArr);
     showLoading(false);
   } catch (err) {
     showError(err.message);
@@ -333,108 +341,202 @@ async function loadData() {
 }
 
 function buildUrl(series, weeks) {
+  const toISO = d => d.toISOString().slice(0, 10);
   const end   = new Date();
   const start = new Date();
   start.setDate(start.getDate() - weeks * 7);
-
-  const fmt = d => d.toISOString().slice(0, 10);
 
   const params = new URLSearchParams({
     api_key: API_KEY,
     frequency: 'weekly',
     'data[0]': 'value',
     'facets[series][]': series,
-    start: fmt(start),
-    end: fmt(end),
+    start: toISO(start),
+    end: toISO(end),
     'sort[0][column]': 'period',
     'sort[0][direction]': 'desc',
-    length: 1000,
+    length: 5000,
     offset: 0,
   });
 
   return `https://api.eia.gov/v2/petroleum/stoc/wstk/data/?${params}`;
 }
 
-function renderStats(data) {
-  const last   = data[data.length - 1];
-  const prev   = data[data.length - 2];
-  const last52 = data.slice(-52);
-  const avg52  = last52.reduce((s, d) => s + d.value, 0) / last52.length;
-  const max52  = Math.max(...last52.map(d => d.value));
-  const min52  = Math.min(...last52.map(d => d.value));
+function buildSeasonalData(data, yearsBack) {
+  const currentYear = new Date().getFullYear();
 
-  document.getElementById('statLast').textContent = fmt(last.value);
-  document.getElementById('statDate').textContent  = last.date;
-
-  if (prev) {
-    const diff = last.value - prev.value;
-    const pct  = (diff / prev.value) * 100;
-    const el   = document.getElementById('statWow');
-    const sub  = document.getElementById('statWowPct');
-    el.textContent  = `${sign(diff)}${fmt(diff)}`;
-    sub.textContent = `${sign(pct)}${pct.toFixed(2)} %`;
-    el.className    = 'value';
-    sub.className   = `sub ${diff >= 0 ? 'up' : 'down'}`;
+  // Group: year -> weekIndex -> value
+  const byYearWeek = {};
+  for (const d of data) {
+    const y  = parseInt(d.date.slice(0, 4));
+    const wi = weekOfYear(d.date);
+    if (wi < 0 || wi > 51) continue;
+    if (!byYearWeek[y]) byYearWeek[y] = {};
+    byYearWeek[y][wi] = d.value;
   }
 
-  document.getElementById('statAvg').textContent    = fmt(avg52);
-  const avgDiff = last.value - avg52;
-  document.getElementById('statAvgDiff').textContent = `${sign(avgDiff)}${fmt(avgDiff)} vs snitt`;
-  document.getElementById('statAvgDiff').className   = `sub ${avgDiff >= 0 ? 'up' : 'down'}`;
+  // Collect previous years that have data
+  const prevYears = [];
+  for (let y = currentYear - 1; y >= currentYear - yearsBack; y--) {
+    if (byYearWeek[y]) prevYears.push(y);
+  }
 
-  document.getElementById('statMax').textContent = fmt(max52);
-  document.getElementById('statMin').textContent = `Min: ${fmt(min52)}`;
+  const NUM_WEEKS = 52;
+  const minBand = [];
+  const maxBand = [];
+  const avgBand = [];
+
+  for (let w = 0; w < NUM_WEEKS; w++) {
+    const vals = prevYears.map(y => byYearWeek[y]?.[w]).filter(v => v != null);
+    if (vals.length === 0) {
+      minBand.push(null);
+      maxBand.push(null);
+      avgBand.push(null);
+    } else {
+      minBand.push(Math.min(...vals));
+      maxBand.push(Math.max(...vals));
+      avgBand.push(vals.reduce((s, v) => s + v, 0) / vals.length);
+    }
+  }
+
+  // Current year: one value per week slot
+  const currentLine = Array.from({ length: NUM_WEEKS }, (_, w) =>
+    byYearWeek[currentYear]?.[w] ?? null
+  );
+
+  // X-axis labels: approximate calendar date for each week slot in current year
+  const xLabels = Array.from({ length: NUM_WEEKS }, (_, w) => {
+    const d = new Date(currentYear, 0, 1 + w * 7);
+    return d.toLocaleDateString('no-NO', { month: 'short', day: 'numeric' });
+  });
+
+  // Flat array of current-year data points (for table + delta chart)
+  const currentYearArr = data
+    .filter(d => d.date.startsWith(String(currentYear)))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  return { currentLine, minBand, maxBand, avgBand, xLabels, currentYear, prevYears, currentYearArr };
 }
 
-function renderMainChart(data, label) {
+function renderStats(s) {
+  const arr  = s.currentYearArr;
+  const last = arr[arr.length - 1];
+  const prev = arr[arr.length - 2];
+
+  document.getElementById('statLast').textContent = fmt(last?.value);
+  document.getElementById('statDate').textContent  = last?.date ?? '';
+
+  if (last && prev) {
+    const diff = last.value - prev.value;
+    const pct  = (diff / prev.value) * 100;
+    document.getElementById('statWow').textContent    = `${sign(diff)}${fmt(diff)}`;
+    document.getElementById('statWowPct').textContent = `${sign(pct)}${pct.toFixed(2)} %`;
+    document.getElementById('statWow').className      = 'value';
+    document.getElementById('statWowPct').className   = `sub ${diff >= 0 ? 'up' : 'down'}`;
+  }
+
+  // Compare last week's value to historical band avg at same week slot
+  if (last) {
+    const wi  = weekOfYear(last.date);
+    const avg = s.avgBand[wi];
+    if (avg != null) {
+      const diff = last.value - avg;
+      document.getElementById('statAvg').textContent    = `${sign(diff)}${fmt(diff)}`;
+      document.getElementById('statAvgDiff').textContent = `vs. hist. snitt (${fmt(avg)})`;
+      document.getElementById('statAvgDiff').className   = `sub ${diff >= 0 ? 'up' : 'down'}`;
+    }
+    const lo = s.minBand[wi];
+    const hi = s.maxBand[wi];
+    document.getElementById('statMax').textContent = `Maks: ${fmt(hi)}`;
+    document.getElementById('statMin').textContent = `Min: ${fmt(lo)}`;
+  }
+}
+
+function renderSeasonalChart(s, label) {
   const canvas = document.getElementById('mainChart');
   canvas.style.display = 'block';
-  document.getElementById('chartTitle').textContent = label;
+
+  const yearFrom = s.prevYears.length ? s.prevYears[s.prevYears.length - 1] : '';
+  const yearTo   = s.prevYears.length ? s.prevYears[0] : '';
+  document.getElementById('chartTitle').textContent =
+    `${label} — ${s.currentYear} vs. historisk band (${yearFrom}–${yearTo})`;
 
   if (mainChart) mainChart.destroy();
-
-  const labels = data.map(d => d.date);
-  const values = data.map(d => d.value);
 
   mainChart = new Chart(canvas, {
     type: 'line',
     data: {
-      labels,
-      datasets: [{
-        label,
-        data: values,
-        borderColor: '#4f6ef7',
-        backgroundColor: 'rgba(79,110,247,0.12)',
-        fill: true,
-        tension: 0.3,
-        pointRadius: data.length > 100 ? 0 : 3,
-        pointHoverRadius: 5,
-        borderWidth: 2,
-      }],
+      labels: s.xLabels,
+      datasets: [
+        {
+          // Upper edge of band — fills DOWN to next dataset (minBand)
+          label: `Maks ${yearFrom}–${yearTo}`,
+          data: s.maxBand,
+          borderColor: 'rgba(99,130,220,0.35)',
+          backgroundColor: 'rgba(79,110,247,0.18)',
+          borderWidth: 1,
+          fill: '+1',
+          pointRadius: 0,
+          tension: 0.4,
+          order: 2,
+        },
+        {
+          // Lower edge of band
+          label: `Min ${yearFrom}–${yearTo}`,
+          data: s.minBand,
+          borderColor: 'rgba(99,130,220,0.35)',
+          backgroundColor: 'rgba(79,110,247,0.18)',
+          borderWidth: 1,
+          fill: false,
+          pointRadius: 0,
+          tension: 0.4,
+          order: 2,
+        },
+        {
+          // Current year line — on top
+          label: String(s.currentYear),
+          data: s.currentLine,
+          borderColor: '#fb923c',
+          backgroundColor: 'transparent',
+          borderWidth: 2.5,
+          fill: false,
+          pointRadius: 3,
+          pointHoverRadius: 6,
+          tension: 0.3,
+          spanGaps: false,
+          order: 1,
+        },
+      ],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { labels: { color: '#94a3b8', font: { size: 12 } } },
+        legend: {
+          labels: {
+            color: '#94a3b8',
+            font: { size: 12 },
+            filter: item => item.datasetIndex !== 1, // hide duplicate min label
+          },
+        },
         tooltip: {
           callbacks: {
-            label: ctx => ` ${fmt(ctx.parsed.y)} tusen fat`,
+            label: ctx => {
+              const v = ctx.parsed.y;
+              if (v == null) return null;
+              return ` ${ctx.dataset.label}: ${fmt(v)} tusen fat`;
+            },
           },
         },
       },
       scales: {
         x: {
-          ticks: { color: '#475569', maxTicksLimit: 12, font: { size: 11 } },
+          ticks: { color: '#475569', maxTicksLimit: 13, font: { size: 11 } },
           grid: { color: '#1e2235' },
         },
         y: {
-          ticks: {
-            color: '#475569',
-            callback: v => fmt(v),
-            font: { size: 11 },
-          },
+          ticks: { color: '#475569', callback: v => fmt(v), font: { size: 11 } },
           grid: { color: '#1e2235' },
         },
       },
@@ -539,7 +641,6 @@ function showError(msg) {
   el.style.display = 'block';
 }
 
-// Auto-load on page open
 window.addEventListener('DOMContentLoaded', loadData);
 </script>
 </body>
