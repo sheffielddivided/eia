@@ -171,14 +171,14 @@
   <!-- ══════════════════════════ INVENTORY ══════════════════════════ -->
   <div id="inventoryView">
     <div class="controls">
-      <select id="seriesSel" onchange="loadData()">
-        <option value="WCRSTUS1">Crude oil stocks (incl. SPR)</option>
-        <option value="WCESTUS1" selected>Crude oil stocks (excl. SPR)</option>
-        <option value="WCSSTUS1">Strategic Petroleum Reserve (SPR)</option>
-        <option value="WGRSTUS1">Total gasoline stocks</option>
-        <option value="WDISTUS1">Distillate stocks (diesel / heating oil)</option>
-        <option value="WKJSTUS1">Jet fuel stocks</option>
-      </select>
+      <div class="toggle-group" id="seriesGrp">
+        <button data-val="WCRSTUS1" onclick="activateBtn(this);loadData()">Crude incl. SPR</button>
+        <button data-val="WCESTUS1" class="active" onclick="activateBtn(this);loadData()">Crude excl. SPR</button>
+        <button data-val="WCSSTUS1" onclick="activateBtn(this);loadData()">SPR</button>
+        <button data-val="WGRSTUS1" onclick="activateBtn(this);loadData()">Gasoline</button>
+        <button data-val="WDISTUS1" onclick="activateBtn(this);loadData()">Distillate</button>
+        <button data-val="WKJSTUS1" onclick="activateBtn(this);loadData()">Jet Fuel</button>
+      </div>
 
       <div class="toggle-group" id="yearsGrp">
         <button data-val="3"  onclick="activateBtn(this);loadData()">3y</button>
@@ -222,13 +222,13 @@
   <!-- ══════════════════════════ FLOWS ══════════════════════════ -->
   <div id="flowsView" style="display:none">
     <div class="controls">
-      <select id="flowProductSel" onchange="loadFlows()">
-        <option value="crude">Crude Oil</option>
-        <option value="gasoline">Gasoline</option>
-        <option value="distillate">Distillate (diesel / heating oil)</option>
-        <option value="jetfuel">Jet Fuel</option>
-        <option value="lng">LNG Exports</option>
-      </select>
+      <div class="toggle-group" id="flowProductGrp">
+        <button data-val="crude"      class="active" onclick="activateBtn(this);loadFlows()">Crude</button>
+        <button data-val="gasoline"   onclick="activateBtn(this);loadFlows()">Gasoline</button>
+        <button data-val="distillate" onclick="activateBtn(this);loadFlows()">Distillate</button>
+        <button data-val="jetfuel"    onclick="activateBtn(this);loadFlows()">Jet Fuel</button>
+        <button data-val="lng"        onclick="activateBtn(this);loadFlows()">LNG</button>
+      </div>
 
       <div class="toggle-group" id="flowPeriodGrp">
         <button data-val="52"   onclick="activateBtn(this);loadFlows()">1y</button>
@@ -452,7 +452,7 @@ function unitLabel() { return unitMode === 'days' ? 'days' : 'million bbl'; }
 function sign(n) { return n >= 0 ? '+' : ''; }
 
 function toDays(v) {
-  const demand = DAILY_DEMAND[document.getElementById('seriesSel').value];
+  const demand = DAILY_DEMAND[getActiveVal('seriesGrp')];
   return (demand == null || v == null) ? null : v / demand;
 }
 
@@ -504,14 +504,14 @@ function setUnit(unit) {
   unitMode = unit;
   document.getElementById('btnAbs').classList.toggle('active',  unit === 'abs');
   document.getElementById('btnDays').classList.toggle('active', unit === 'days');
-  const noSupply = DAILY_DEMAND[document.getElementById('seriesSel').value] == null;
+  const noSupply = DAILY_DEMAND[getActiveVal('seriesGrp')] == null;
   if (unit === 'days' && noSupply) { showErr('inv', 'Days of supply is not applicable for the SPR.'); return; }
   hideErr('inv');
   if (cachedData) renderAll();
 }
 
 async function loadData() {
-  const series    = document.getElementById('seriesSel').value;
+  const series    = getActiveVal('seriesGrp');
   const yearsBack = parseInt(getActiveVal('yearsGrp'), 10);
   if (unitMode === 'days' && DAILY_DEMAND[series] == null) setUnit('abs');
   hideErr('inv');
@@ -532,7 +532,7 @@ async function loadData() {
 }
 
 function renderAll() {
-  const series    = document.getElementById('seriesSel').value;
+  const series    = getActiveVal('seriesGrp');
   const yearsBack = parseInt(getActiveVal('yearsGrp'), 10);
   const label     = SERIES_LABELS[series] || series;
   const s         = buildSeasonalData(cachedData, yearsBack);
@@ -633,7 +633,7 @@ function renderDeltaChart(data) {
 // ── Flows ─────────────────────────────────────────────────────────────────────
 
 async function loadFlows() {
-  const productKey = document.getElementById('flowProductSel').value;
+  const productKey = getActiveVal('flowProductGrp');
   const weeks      = parseInt(getActiveVal('flowPeriodGrp'), 10);
   const product    = FLOW_PRODUCTS[productKey];
   hideErr('flow'); showLoading('flow', true);
