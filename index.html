@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>EIA Oljelagre</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -25,17 +24,8 @@
       gap: 1rem;
     }
 
-    header h1 {
-      font-size: 1.4rem;
-      font-weight: 600;
-      color: #f1f5f9;
-    }
-
-    header span {
-      font-size: 0.8rem;
-      color: #64748b;
-      margin-left: auto;
-    }
+    header h1 { font-size: 1.4rem; font-weight: 600; color: #f1f5f9; }
+    header span { font-size: 0.8rem; color: #64748b; margin-left: auto; }
 
     .badge {
       background: #1e3a5f;
@@ -49,11 +39,7 @@
       letter-spacing: 0.05em;
     }
 
-    main {
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 2rem 1.5rem;
-    }
+    main { max-width: 1200px; margin: 0 auto; padding: 2rem 1.5rem; }
 
     .controls {
       display: flex;
@@ -63,12 +49,9 @@
       align-items: center;
     }
 
-    .controls label {
-      font-size: 0.85rem;
-      color: #94a3b8;
-    }
+    .controls label { font-size: 0.85rem; color: #94a3b8; }
 
-    select, button {
+    select {
       background: #1e2235;
       border: 1px solid #2d3148;
       color: #e2e8f0;
@@ -79,17 +62,29 @@
       outline: none;
       transition: border-color 0.15s;
     }
+    select:hover { border-color: #4f6ef7; }
 
-    select:hover, button:hover { border-color: #4f6ef7; }
-
-    button.primary {
-      background: #3b5bdb;
-      border-color: #4f6ef7;
-      font-weight: 600;
+    .mode-toggle {
+      display: flex;
+      border: 1px solid #2d3148;
+      border-radius: 6px;
+      overflow: hidden;
+      margin-left: auto;
     }
 
-    button.primary:hover { background: #4263eb; }
-    button.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+    .mode-toggle button {
+      background: #1e2235;
+      border: none;
+      color: #64748b;
+      padding: 0.45rem 1.1rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .mode-toggle button:not(:last-child) { border-right: 1px solid #2d3148; }
+    .mode-toggle button.active { background: #3b5bdb; color: #fff; font-weight: 600; }
+    .mode-toggle button:not(.active):hover { background: #252840; color: #e2e8f0; }
 
     .grid {
       display: grid;
@@ -113,16 +108,8 @@
       margin-bottom: 0.4rem;
     }
 
-    .stat-card .value {
-      font-size: 1.6rem;
-      font-weight: 700;
-      color: #f1f5f9;
-    }
-
-    .stat-card .sub {
-      font-size: 0.8rem;
-      margin-top: 0.25rem;
-    }
+    .stat-card .value { font-size: 1.6rem; font-weight: 700; color: #f1f5f9; }
+    .stat-card .sub { font-size: 0.8rem; margin-top: 0.25rem; }
 
     .sub.up   { color: #4ade80; }
     .sub.down { color: #f87171; }
@@ -143,10 +130,7 @@
       margin-bottom: 1rem;
     }
 
-    .chart-wrap {
-      position: relative;
-      height: 340px;
-    }
+    .chart-wrap { position: relative; height: 360px; }
 
     .status {
       text-align: center;
@@ -157,8 +141,7 @@
 
     .spinner {
       display: inline-block;
-      width: 28px;
-      height: 28px;
+      width: 28px; height: 28px;
       border: 3px solid #2d3148;
       border-top-color: #4f6ef7;
       border-radius: 50%;
@@ -177,35 +160,6 @@
       font-size: 0.875rem;
       margin-bottom: 1rem;
     }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.85rem;
-    }
-
-    th {
-      text-align: left;
-      padding: 0.6rem 0.8rem;
-      color: #64748b;
-      font-weight: 600;
-      border-bottom: 1px solid #2d3148;
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    td {
-      padding: 0.55rem 0.8rem;
-      border-bottom: 1px solid #1e2235;
-      color: #cbd5e1;
-    }
-
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: #1e2235; }
-
-    .tbl-up   { color: #4ade80; }
-    .tbl-down { color: #f87171; }
   </style>
 </head>
 <body>
@@ -219,36 +173,55 @@
 <main>
   <div class="controls">
     <label for="seriesSel">Serie:</label>
-    <select id="seriesSel">
+    <select id="seriesSel" onchange="loadData()">
       <option value="WCRSTUS1">Råoljelager totalt (inkl. SPR)</option>
       <option value="WCESTUS1" selected>Råoljelager (ekskl. SPR)</option>
+      <option value="WCSSTUS1">Strategisk petroleumsreserve (SPR)</option>
       <option value="WGRSTUS1">Totalt bensinlager</option>
       <option value="WDISTUS1">Destillatlager (diesel/fyringsolje)</option>
-      <option value="WKJSTUS1">Flydriv­stofflager</option>
-      <option value="WCRFPUS2">Raffinerikapasitet i drift</option>
+      <option value="WKJSTUS1">Flydrivstofflager</option>
     </select>
 
-    <label for="bandSel">Historisk band:</label>
-    <select id="bandSel">
+    <label for="yearsSel" id="yearsLabel">Historisk band:</label>
+    <select id="yearsSel" onchange="onYearsChange()">
       <option value="3">3 år</option>
       <option value="5" selected>5 år</option>
       <option value="10">10 år</option>
     </select>
 
-    <button class="primary" id="fetchBtn" onclick="loadData()">Hent data</button>
+    <div class="mode-toggle">
+      <button id="btnSeasonal" class="active" onclick="setMode('seasonal')">Sesongalt</button>
+      <button id="btnHistoric" onclick="setMode('historic')">Historisk</button>
+    </div>
   </div>
 
   <div id="errorBox" style="display:none"></div>
 
-  <div class="grid" id="statsGrid">
-    <div class="stat-card"><div class="label">Siste verdi</div><div class="value" id="statLast">—</div><div class="sub flat" id="statDate">laster…</div></div>
-    <div class="stat-card"><div class="label">Endring uke/uke</div><div class="value" id="statWow">—</div><div class="sub flat" id="statWowPct"></div></div>
-    <div class="stat-card"><div class="label">vs. historisk snitt</div><div class="value" id="statAvg">—</div><div class="sub flat" id="statAvgDiff"></div></div>
-    <div class="stat-card"><div class="label">Historisk band (siste uke)</div><div class="value" id="statMax">—</div><div class="sub flat" id="statMin"></div></div>
+  <div class="grid">
+    <div class="stat-card">
+      <div class="label">Siste verdi</div>
+      <div class="value" id="statLast">—</div>
+      <div class="sub flat" id="statDate">laster…</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Endring uke/uke</div>
+      <div class="value" id="statWow">—</div>
+      <div class="sub flat" id="statWowPct"></div>
+    </div>
+    <div class="stat-card">
+      <div class="label">vs. historisk snitt</div>
+      <div class="value" id="statAvg">—</div>
+      <div class="sub flat" id="statAvgDiff"></div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Historisk band (denne uke)</div>
+      <div class="value" id="statMax">—</div>
+      <div class="sub flat" id="statMin"></div>
+    </div>
   </div>
 
   <div class="chart-card">
-    <h2 id="chartTitle">Ukentlig lagerdata</h2>
+    <h2 id="chartTitle">Laster…</h2>
     <div class="chart-wrap">
       <div class="status" id="loadingMsg"><div class="spinner"></div><br>Henter data fra EIA…</div>
       <canvas id="mainChart" style="display:none"></canvas>
@@ -256,16 +229,9 @@
   </div>
 
   <div class="chart-card">
-    <h2>Uke-over-uke endring (tusen fat)</h2>
+    <h2>Uke-over-uke endring — inneværende år (tusen fat)</h2>
     <div class="chart-wrap" style="height:220px">
       <canvas id="deltaChart" style="display:none"></canvas>
-    </div>
-  </div>
-
-  <div class="chart-card">
-    <h2>Siste 20 uker</h2>
-    <div id="tableWrap">
-      <div class="status">Ingen data ennå.</div>
     </div>
   </div>
 </main>
@@ -276,25 +242,24 @@ const API_KEY = 'dmZglvmWG86ewOel1qYABoroVEnhGjUNTiHU4Rki';
 const SERIES_LABELS = {
   WCRSTUS1: 'Råoljelager totalt (inkl. SPR)',
   WCESTUS1: 'Råoljelager (ekskl. SPR)',
+  WCSSTUS1: 'Strategisk petroleumsreserve (SPR)',
   WGRSTUS1: 'Totalt bensinlager',
   WDISTUS1: 'Destillatlager',
-  WKJSTUS1: 'Flydriv­stofflager',
-  WCRFPUS2: 'Raffinerikapasitet i drift',
+  WKJSTUS1: 'Flydrivstofflager',
 };
 
-let mainChart = null;
+let mainChart  = null;
 let deltaChart = null;
+let cachedData = null;   // raw sorted array, reused on mode switch
+let chartMode  = 'seasonal';
 
 function fmt(n) {
   if (n == null || isNaN(n)) return '—';
   return n.toLocaleString('no-NO', { maximumFractionDigits: 0 });
 }
 
-function sign(n) {
-  return n >= 0 ? '+' : '';
-}
+function sign(n) { return n >= 0 ? '+' : ''; }
 
-// Returns week-of-year index 0–51 for a YYYY-MM-DD string
 function weekOfYear(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
   const date = new Date(y, m - 1, d);
@@ -302,17 +267,30 @@ function weekOfYear(dateStr) {
   return Math.floor((date - jan1) / (7 * 24 * 60 * 60 * 1000));
 }
 
-async function loadData() {
-  const series  = document.getElementById('seriesSel').value;
-  const yearsBack = parseInt(document.getElementById('bandSel').value, 10);
-  const btn     = document.getElementById('fetchBtn');
+// Re-render from cache when mode or years changes (no new fetch needed)
+function setMode(mode) {
+  chartMode = mode;
+  document.getElementById('btnSeasonal').classList.toggle('active', mode === 'seasonal');
+  document.getElementById('btnHistoric').classList.toggle('active', mode === 'historic');
+  document.getElementById('yearsLabel').textContent =
+    mode === 'seasonal' ? 'Historisk band:' : 'Vis historikk:';
+  if (cachedData) renderAll();
+}
 
-  btn.disabled = true;
+function onYearsChange() {
+  // Historical mode: may need more data than cached — re-fetch.
+  // Seasonal mode: always re-fetch (band width changes).
+  loadData();
+}
+
+async function loadData() {
+  const series   = document.getElementById('seriesSel').value;
+  const yearsBack = parseInt(document.getElementById('yearsSel').value, 10);
+
   showLoading(true);
   hideError();
 
   try {
-    // Fetch enough data to cover current year + yearsBack previous years
     const url = buildUrl(series, (yearsBack + 2) * 52);
     const resp = await fetch(url);
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -321,22 +299,32 @@ async function loadData() {
     const raw = json?.response?.data;
     if (!raw || raw.length === 0) throw new Error('Ingen data returnert fra EIA.');
 
-    const data = raw
+    cachedData = raw
       .map(d => ({ date: d.period, value: parseFloat(d.value) }))
       .filter(d => !isNaN(d.value))
       .sort((a, b) => a.date.localeCompare(b.date));
 
-    const seasonal = buildSeasonalData(data, yearsBack);
-    renderStats(seasonal);
-    renderSeasonalChart(seasonal, SERIES_LABELS[series] || series);
-    renderDeltaChart(seasonal.currentYearArr);
-    renderTable(seasonal.currentYearArr);
+    renderAll();
     showLoading(false);
   } catch (err) {
     showError(err.message);
     showLoading(false);
-  } finally {
-    btn.disabled = false;
+  }
+}
+
+function renderAll() {
+  const series    = document.getElementById('seriesSel').value;
+  const yearsBack = parseInt(document.getElementById('yearsSel').value, 10);
+  const label     = SERIES_LABELS[series] || series;
+  const seasonal  = buildSeasonalData(cachedData, yearsBack);
+
+  renderStats(seasonal);
+  renderDeltaChart(seasonal.currentYearArr);
+
+  if (chartMode === 'seasonal') {
+    renderSeasonalChart(seasonal, label);
+  } else {
+    renderHistoricChart(cachedData, label, yearsBack);
   }
 }
 
@@ -365,7 +353,6 @@ function buildUrl(series, weeks) {
 function buildSeasonalData(data, yearsBack) {
   const currentYear = new Date().getFullYear();
 
-  // Group: year -> weekIndex -> value
   const byYearWeek = {};
   for (const d of data) {
     const y  = parseInt(d.date.slice(0, 4));
@@ -375,42 +362,31 @@ function buildSeasonalData(data, yearsBack) {
     byYearWeek[y][wi] = d.value;
   }
 
-  // Collect previous years that have data
   const prevYears = [];
   for (let y = currentYear - 1; y >= currentYear - yearsBack; y--) {
     if (byYearWeek[y]) prevYears.push(y);
   }
 
-  const NUM_WEEKS = 52;
-  const minBand = [];
-  const maxBand = [];
-  const avgBand = [];
-
-  for (let w = 0; w < NUM_WEEKS; w++) {
+  const minBand = [], maxBand = [], avgBand = [];
+  for (let w = 0; w < 52; w++) {
     const vals = prevYears.map(y => byYearWeek[y]?.[w]).filter(v => v != null);
-    if (vals.length === 0) {
-      minBand.push(null);
-      maxBand.push(null);
-      avgBand.push(null);
-    } else {
+    if (!vals.length) { minBand.push(null); maxBand.push(null); avgBand.push(null); }
+    else {
       minBand.push(Math.min(...vals));
       maxBand.push(Math.max(...vals));
       avgBand.push(vals.reduce((s, v) => s + v, 0) / vals.length);
     }
   }
 
-  // Current year: one value per week slot
-  const currentLine = Array.from({ length: NUM_WEEKS }, (_, w) =>
+  const currentLine = Array.from({ length: 52 }, (_, w) =>
     byYearWeek[currentYear]?.[w] ?? null
   );
 
-  // X-axis labels: approximate calendar date for each week slot in current year
-  const xLabels = Array.from({ length: NUM_WEEKS }, (_, w) => {
+  const xLabels = Array.from({ length: 52 }, (_, w) => {
     const d = new Date(currentYear, 0, 1 + w * 7);
     return d.toLocaleDateString('no-NO', { month: 'short', day: 'numeric' });
   });
 
-  // Flat array of current-year data points (for table + delta chart)
   const currentYearArr = data
     .filter(d => d.date.startsWith(String(currentYear)))
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -435,20 +411,17 @@ function renderStats(s) {
     document.getElementById('statWowPct').className   = `sub ${diff >= 0 ? 'up' : 'down'}`;
   }
 
-  // Compare last week's value to historical band avg at same week slot
   if (last) {
     const wi  = weekOfYear(last.date);
     const avg = s.avgBand[wi];
     if (avg != null) {
       const diff = last.value - avg;
-      document.getElementById('statAvg').textContent    = `${sign(diff)}${fmt(diff)}`;
+      document.getElementById('statAvg').textContent     = `${sign(diff)}${fmt(diff)}`;
       document.getElementById('statAvgDiff').textContent = `vs. hist. snitt (${fmt(avg)})`;
       document.getElementById('statAvgDiff').className   = `sub ${diff >= 0 ? 'up' : 'down'}`;
     }
-    const lo = s.minBand[wi];
-    const hi = s.maxBand[wi];
-    document.getElementById('statMax').textContent = `Maks: ${fmt(hi)}`;
-    document.getElementById('statMin').textContent = `Min: ${fmt(lo)}`;
+    document.getElementById('statMax').textContent = `Maks: ${fmt(s.maxBand[wi])}`;
+    document.getElementById('statMin').textContent = `Min: ${fmt(s.minBand[wi])}`;
   }
 }
 
@@ -456,10 +429,10 @@ function renderSeasonalChart(s, label) {
   const canvas = document.getElementById('mainChart');
   canvas.style.display = 'block';
 
-  const yearFrom = s.prevYears.length ? s.prevYears[s.prevYears.length - 1] : '';
-  const yearTo   = s.prevYears.length ? s.prevYears[0] : '';
+  const yFrom = s.prevYears.length ? s.prevYears[s.prevYears.length - 1] : '';
+  const yTo   = s.prevYears.length ? s.prevYears[0] : '';
   document.getElementById('chartTitle').textContent =
-    `${label} — ${s.currentYear} vs. historisk band (${yearFrom}–${yearTo})`;
+    `${label} — ${s.currentYear} vs. historisk band (${yFrom}–${yTo})`;
 
   if (mainChart) mainChart.destroy();
 
@@ -469,11 +442,10 @@ function renderSeasonalChart(s, label) {
       labels: s.xLabels,
       datasets: [
         {
-          // Upper edge of band — fills DOWN to next dataset (minBand)
-          label: `Maks ${yearFrom}–${yearTo}`,
+          label: `Maks ${yFrom}–${yTo}`,
           data: s.maxBand,
-          borderColor: 'rgba(99,130,220,0.35)',
-          backgroundColor: 'rgba(79,110,247,0.18)',
+          borderColor: 'rgba(99,130,220,0.3)',
+          backgroundColor: 'rgba(79,110,247,0.15)',
           borderWidth: 1,
           fill: '+1',
           pointRadius: 0,
@@ -481,11 +453,10 @@ function renderSeasonalChart(s, label) {
           order: 2,
         },
         {
-          // Lower edge of band
-          label: `Min ${yearFrom}–${yearTo}`,
+          label: `Min ${yFrom}–${yTo}`,
           data: s.minBand,
-          borderColor: 'rgba(99,130,220,0.35)',
-          backgroundColor: 'rgba(79,110,247,0.18)',
+          borderColor: 'rgba(99,130,220,0.3)',
+          backgroundColor: 'transparent',
           borderWidth: 1,
           fill: false,
           pointRadius: 0,
@@ -493,7 +464,6 @@ function renderSeasonalChart(s, label) {
           order: 2,
         },
         {
-          // Current year line — on top
           label: String(s.currentYear),
           data: s.currentLine,
           borderColor: '#fb923c',
@@ -508,52 +478,87 @@ function renderSeasonalChart(s, label) {
         },
       ],
     },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: {
-          labels: {
-            color: '#94a3b8',
-            font: { size: 12 },
-            filter: item => item.datasetIndex !== 1, // hide duplicate min label
-          },
-        },
-        tooltip: {
-          callbacks: {
-            label: ctx => {
-              const v = ctx.parsed.y;
-              if (v == null) return null;
-              return ` ${ctx.dataset.label}: ${fmt(v)} tusen fat`;
-            },
-          },
+    options: chartOptions({
+      filter: item => item.datasetIndex !== 1,
+    }),
+  });
+}
+
+function renderHistoricChart(data, label, yearsBack) {
+  const canvas = document.getElementById('mainChart');
+  canvas.style.display = 'block';
+
+  const cutoff = new Date();
+  cutoff.setFullYear(cutoff.getFullYear() - yearsBack);
+  const visible = data.filter(d => d.date >= cutoff.toISOString().slice(0, 10));
+
+  document.getElementById('chartTitle').textContent =
+    `${label} — historisk (siste ${yearsBack} år)`;
+
+  if (mainChart) mainChart.destroy();
+
+  mainChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: visible.map(d => d.date),
+      datasets: [{
+        label,
+        data: visible.map(d => d.value),
+        borderColor: '#4f6ef7',
+        backgroundColor: 'rgba(79,110,247,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 0,
+        pointHoverRadius: 5,
+        borderWidth: 2,
+      }],
+    },
+    options: chartOptions({}),
+  });
+}
+
+function chartOptions({ filter } = {}) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: {
+        labels: {
+          color: '#94a3b8',
+          font: { size: 12 },
+          ...(filter ? { filter } : {}),
         },
       },
-      scales: {
-        x: {
-          ticks: { color: '#475569', maxTicksLimit: 13, font: { size: 11 } },
-          grid: { color: '#1e2235' },
-        },
-        y: {
-          ticks: { color: '#475569', callback: v => fmt(v), font: { size: 11 } },
-          grid: { color: '#1e2235' },
+      tooltip: {
+        callbacks: {
+          label: ctx => {
+            const v = ctx.parsed.y;
+            if (v == null) return null;
+            return ` ${ctx.dataset.label}: ${fmt(v)} tusen fat`;
+          },
         },
       },
     },
-  });
+    scales: {
+      x: {
+        ticks: { color: '#475569', maxTicksLimit: 13, font: { size: 11 } },
+        grid: { color: '#1e2235' },
+      },
+      y: {
+        ticks: { color: '#475569', callback: v => fmt(v), font: { size: 11 } },
+        grid: { color: '#1e2235' },
+      },
+    },
+  };
 }
 
 function renderDeltaChart(data) {
   const canvas = document.getElementById('deltaChart');
   canvas.style.display = 'block';
-
   if (deltaChart) deltaChart.destroy();
 
-  const labels = [];
-  const deltas = [];
-  const colors = [];
-
+  const labels = [], deltas = [], colors = [];
   for (let i = 1; i < data.length; i++) {
     const d = data[i].value - data[i - 1].value;
     labels.push(data[i].date);
@@ -565,12 +570,7 @@ function renderDeltaChart(data) {
     type: 'bar',
     data: {
       labels,
-      datasets: [{
-        label: 'Uke-over-uke endring',
-        data: deltas,
-        backgroundColor: colors,
-        borderWidth: 0,
-      }],
+      datasets: [{ data: deltas, backgroundColor: colors, borderWidth: 0 }],
     },
     options: {
       responsive: true,
@@ -584,40 +584,11 @@ function renderDeltaChart(data) {
         },
       },
       scales: {
-        x: {
-          ticks: { color: '#475569', maxTicksLimit: 14, font: { size: 11 } },
-          grid: { display: false },
-        },
-        y: {
-          ticks: { color: '#475569', callback: v => fmt(v), font: { size: 11 } },
-          grid: { color: '#1e2235' },
-        },
+        x: { ticks: { color: '#475569', maxTicksLimit: 14, font: { size: 11 } }, grid: { display: false } },
+        y: { ticks: { color: '#475569', callback: v => fmt(v), font: { size: 11 } }, grid: { color: '#1e2235' } },
       },
     },
   });
-}
-
-function renderTable(data) {
-  const last20 = data.slice(-20).reverse();
-  let html = '<table><thead><tr><th>Dato</th><th>Lager (tusen fat)</th><th>Endring</th><th>% endring</th></tr></thead><tbody>';
-
-  for (let i = 0; i < last20.length; i++) {
-    const cur  = last20[i];
-    const prev = last20[i + 1];
-    let diffHtml = '<td>—</td><td>—</td>';
-
-    if (prev) {
-      const diff = cur.value - prev.value;
-      const pct  = (diff / prev.value) * 100;
-      const cls  = diff >= 0 ? 'tbl-up' : 'tbl-down';
-      diffHtml   = `<td class="${cls}">${sign(diff)}${fmt(diff)}</td><td class="${cls}">${sign(pct)}${pct.toFixed(2)} %</td>`;
-    }
-
-    html += `<tr><td>${cur.date}</td><td>${fmt(cur.value)}</td>${diffHtml}</tr>`;
-  }
-
-  html += '</tbody></table>';
-  document.getElementById('tableWrap').innerHTML = html;
 }
 
 function showLoading(on) {
@@ -631,7 +602,6 @@ function showLoading(on) {
 function hideError() {
   const el = document.getElementById('errorBox');
   el.style.display = 'none';
-  el.textContent = '';
 }
 
 function showError(msg) {
