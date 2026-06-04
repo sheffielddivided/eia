@@ -181,12 +181,12 @@
         <option value="WKJSTUS1">Jet fuel stocks</option>
       </select>
 
-      <label for="yearsSel" id="yearsLabel">Historical band:</label>
-      <select id="yearsSel" onchange="loadData()">
-        <option value="3">3 years</option>
-        <option value="5" selected>5 years</option>
-        <option value="10">10 years</option>
-      </select>
+      <label id="yearsLabel">Historical band:</label>
+      <div class="toggle-group" id="yearsGrp">
+        <button data-val="3"  onclick="activateBtn(this);loadData()">3y</button>
+        <button data-val="5"  class="active" onclick="activateBtn(this);loadData()">5y</button>
+        <button data-val="10" onclick="activateBtn(this);loadData()">10y</button>
+      </div>
 
       <div class="spacer"></div>
 
@@ -233,14 +233,14 @@
         <option value="lng">LNG (Natural Gas)</option>
       </select>
 
-      <label for="flowPeriodSel">Period:</label>
-      <select id="flowPeriodSel" onchange="loadFlows()">
-        <option value="52">1 year</option>
-        <option value="104" selected>2 years</option>
-        <option value="260">5 years</option>
-        <option value="520">10 years</option>
-        <option value="1040">20 years</option>
-      </select>
+      <label>Period:</label>
+      <div class="toggle-group" id="flowPeriodGrp">
+        <button data-val="52"   onclick="activateBtn(this);loadFlows()">1y</button>
+        <button data-val="104"  class="active" onclick="activateBtn(this);loadFlows()">2y</button>
+        <button data-val="260"  onclick="activateBtn(this);loadFlows()">5y</button>
+        <button data-val="520"  onclick="activateBtn(this);loadFlows()">10y</button>
+        <button data-val="1040" onclick="activateBtn(this);loadFlows()">20y</button>
+      </div>
     </div>
 
     <div id="flowErrorBox" style="display:none"></div>
@@ -265,14 +265,14 @@
         <option value="natgas">Natural Gas — Henry Hub ($/MMBtu)</option>
       </select>
 
-      <label for="pricePeriodSel">Period:</label>
-      <select id="pricePeriodSel" onchange="loadPrices()">
-        <option value="52">1 year</option>
-        <option value="104" selected>2 years</option>
-        <option value="260">5 years</option>
-        <option value="520">10 years</option>
-        <option value="1040">20 years</option>
-      </select>
+      <label>Period:</label>
+      <div class="toggle-group" id="pricePeriodGrp">
+        <button data-val="52"   onclick="activateBtn(this);loadPrices()">1y</button>
+        <button data-val="104"  class="active" onclick="activateBtn(this);loadPrices()">2y</button>
+        <button data-val="260"  onclick="activateBtn(this);loadPrices()">5y</button>
+        <button data-val="520"  onclick="activateBtn(this);loadPrices()">10y</button>
+        <button data-val="1040" onclick="activateBtn(this);loadPrices()">20y</button>
+      </div>
     </div>
 
     <div id="priceErrorBox" style="display:none"></div>
@@ -482,6 +482,14 @@ function setMode(mode) {
   if (cachedData) renderAll();
 }
 
+function activateBtn(btn) {
+  btn.closest('.toggle-group').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+function getActiveVal(id) {
+  return document.querySelector('#' + id + ' button.active').dataset.val;
+}
+
 function setUnit(unit) {
   unitMode = unit;
   document.getElementById('btnAbs').classList.toggle('active',  unit === 'abs');
@@ -494,7 +502,7 @@ function setUnit(unit) {
 
 async function loadData() {
   const series    = document.getElementById('seriesSel').value;
-  const yearsBack = parseInt(document.getElementById('yearsSel').value, 10);
+  const yearsBack = parseInt(getActiveVal('yearsGrp'), 10);
   if (unitMode === 'days' && DAILY_DEMAND[series] == null) setUnit('abs');
   hideErr('inv');
   showLoading('inv', true);
@@ -515,7 +523,7 @@ async function loadData() {
 
 function renderAll() {
   const series    = document.getElementById('seriesSel').value;
-  const yearsBack = parseInt(document.getElementById('yearsSel').value, 10);
+  const yearsBack = parseInt(getActiveVal('yearsGrp'), 10);
   const label     = SERIES_LABELS[series] || series;
   const s         = buildSeasonalData(cachedData, yearsBack);
   const lastDate  = s.currentYearArr.at(-1)?.date ?? cachedData.at(-1)?.date ?? '';
@@ -616,7 +624,7 @@ function renderDeltaChart(data) {
 
 async function loadFlows() {
   const productKey = document.getElementById('flowProductSel').value;
-  const weeks      = parseInt(document.getElementById('flowPeriodSel').value, 10);
+  const weeks      = parseInt(getActiveVal('flowPeriodGrp'), 10);
   const product    = FLOW_PRODUCTS[productKey];
   hideErr('flow'); showLoading('flow', true);
   try {
@@ -709,7 +717,7 @@ function renderFlowsChart(byId, product) {
 
 async function loadPrices() {
   const groupKey = document.getElementById('priceGroupSel').value;
-  const weeks    = parseInt(document.getElementById('pricePeriodSel').value, 10);
+  const weeks    = parseInt(getActiveVal('pricePeriodGrp'), 10);
   const group    = PRICE_GROUPS[groupKey];
   hideErr('price'); showLoading('price', true);
   try {
