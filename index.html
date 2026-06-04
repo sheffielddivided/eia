@@ -161,9 +161,10 @@
 </header>
 
 <nav class="view-nav">
-  <button id="tabInventory" class="active" onclick="setView('inventory')">Inventory</button>
-  <button id="tabFlows"                    onclick="setView('flows')">Flows</button>
-  <button id="tabPrices"                   onclick="setView('prices')">Prices</button>
+  <button id="tabCrude"    class="active" onclick="setView('crude')">Crude</button>
+  <button id="tabProducts"               onclick="setView('products')">Products</button>
+  <button id="tabFlows"                  onclick="setView('flows')">Flows</button>
+  <button id="tabPrices"                 onclick="setView('prices')">Prices</button>
 </nav>
 
 <main>
@@ -171,11 +172,13 @@
   <!-- ══════════════════════════ INVENTORY ══════════════════════════ -->
   <div id="inventoryView">
     <div class="controls">
-      <div class="toggle-group" id="seriesGrp">
-        <button data-val="WCRSTUS1" onclick="activateBtn(this);loadData()">Crude incl. SPR</button>
-        <button data-val="WCESTUS1" class="active" onclick="activateBtn(this);loadData()">Crude excl. SPR</button>
-        <button data-val="WCSSTUS1" onclick="activateBtn(this);loadData()">SPR</button>
-        <button data-val="WGRSTUS1" onclick="activateBtn(this);loadData()">Gasoline</button>
+      <div class="toggle-group" id="seriesGrpCrude">
+        <button data-val="WCRSTUS1" onclick="activateBtn(this);loadData()">Incl. SPR</button>
+        <button data-val="WCESTUS1" class="active" onclick="activateBtn(this);loadData()">Excl. SPR</button>
+        <button data-val="WCSSTUS1" onclick="activateBtn(this);loadData()">SPR only</button>
+      </div>
+      <div class="toggle-group" id="seriesGrpProducts" style="display:none">
+        <button data-val="WGRSTUS1" class="active" onclick="activateBtn(this);loadData()">Gasoline</button>
         <button data-val="WDISTUS1" onclick="activateBtn(this);loadData()">Distillate</button>
         <button data-val="WKJSTUS1" onclick="activateBtn(this);loadData()">Jet Fuel</button>
       </div>
@@ -452,7 +455,7 @@ function unitLabel() { return unitMode === 'days' ? 'days' : 'million bbl'; }
 function sign(n) { return n >= 0 ? '+' : ''; }
 
 function toDays(v) {
-  const demand = DAILY_DEMAND[getActiveVal('seriesGrp')];
+  const demand = DAILY_DEMAND[getActiveSeries()];
   return (demand == null || v == null) ? null : v / demand;
 }
 
@@ -475,12 +478,21 @@ const BASE_OPT = { responsive: true, maintainAspectRatio: false, interaction: { 
 // ── View switching ────────────────────────────────────────────────────────────
 
 function setView(view) {
-  ['inventory','flows','prices'].forEach(v => {
-    document.getElementById(`tab${v.charAt(0).toUpperCase()+v.slice(1)}`).classList.toggle('active', v === view);
-    document.getElementById(`${v}View`).style.display = v === view ? '' : 'none';
-  });
+  const isCrude    = view === 'crude';
+  const isProducts = view === 'products';
+  const isInv      = isCrude || isProducts;
+  document.getElementById('tabCrude').classList.toggle('active', isCrude);
+  document.getElementById('tabProducts').classList.toggle('active', isProducts);
+  document.getElementById('tabFlows').classList.toggle('active', view === 'flows');
+  document.getElementById('tabPrices').classList.toggle('active', view === 'prices');
+  document.getElementById('inventoryView').style.display = isInv        ? '' : 'none';
+  document.getElementById('flowsView').style.display     = view === 'flows'  ? '' : 'none';
+  document.getElementById('pricesView').style.display    = view === 'prices' ? '' : 'none';
+  document.getElementById('seriesGrpCrude').style.display    = isCrude    ? '' : 'none';
+  document.getElementById('seriesGrpProducts').style.display = isProducts ? '' : 'none';
   if (view === 'flows'  && !flowChart)  loadFlows();
   if (view === 'prices' && !priceChart) loadPrices();
+  if (isInv) loadData();
 }
 
 // ── Inventory ─────────────────────────────────────────────────────────────────
@@ -499,19 +511,24 @@ function activateBtn(btn) {
 function getActiveVal(id) {
   return document.querySelector('#' + id + ' button.active').dataset.val;
 }
+function getActiveSeries() {
+  const grp = document.getElementById('seriesGrpCrude').style.display !== 'none'
+    ? 'seriesGrpCrude' : 'seriesGrpProducts';
+  return getActiveVal(grp);
+}
 
 function setUnit(unit) {
   unitMode = unit;
   document.getElementById('btnAbs').classList.toggle('active',  unit === 'abs');
   document.getElementById('btnDays').classList.toggle('active', unit === 'days');
-  const noSupply = DAILY_DEMAND[getActiveVal('seriesGrp')] == null;
+  const noSupply = DAILY_DEMAND[getActiveSeries()] == null;
   if (unit === 'days' && noSupply) { showErr('inv', 'Days of supply is not applicable for the SPR.'); return; }
   hideErr('inv');
   if (cachedData) renderAll();
 }
 
 async function loadData() {
-  const series    = getActiveVal('seriesGrp');
+  const series    = getActiveSeries();
   const yearsBack = parseInt(getActiveVal('yearsGrp'), 10);
   if (unitMode === 'days' && DAILY_DEMAND[series] == null) setUnit('abs');
   hideErr('inv');
@@ -532,7 +549,7 @@ async function loadData() {
 }
 
 function renderAll() {
-  const series    = getActiveVal('seriesGrp');
+  const series    = getActiveSeries();
   const yearsBack = parseInt(getActiveVal('yearsGrp'), 10);
   const label     = SERIES_LABELS[series] || series;
   const s         = buildSeasonalData(cachedData, yearsBack);
