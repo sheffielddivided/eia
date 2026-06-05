@@ -444,7 +444,7 @@ function fmt(n) { return fmtN(n, 1); }
 function sign(n) { return n >= 0 ? '+' : ''; }
 
 function convertArr(arr) {
-  return arr.map(v => v == null ? null : v / 1000);
+  return arr.map(v => v == null ? null : v);
 }
 
 function weekOfYear(dateStr) {
@@ -595,7 +595,7 @@ function renderHistoricChart(data, label, yearsBack) {
   if (mainChart) mainChart.destroy();
   mainChart = new Chart(canvas, {
     type: 'line',
-    data: { labels: visible.map(d => d.date), datasets: [{ label, data: visible.map(d => d.value / 1000), borderColor: '#4f6ef7', backgroundColor: 'rgba(79,110,247,0.1)', fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2 }] },
+    data: { labels: visible.map(d => d.date), datasets: [{ label, data: visible.map(d => d.value), borderColor: '#4f6ef7', backgroundColor: 'rgba(79,110,247,0.1)', fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2 }] },
     options: { ...BASE_OPT, plugins: { legend: LEGEND, tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)} million bbl` } } }, scales: { x: XSCALE, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmtN(v, 0) } } } },
   });
 }
@@ -607,7 +607,7 @@ function renderDeltaChart(data) {
   const labels = [], deltas = [], colors = [];
   for (let i = 1; i < data.length; i++) {
     const raw = data[i].value - data[i - 1].value;
-    const d   = raw / 1000;
+    const d   = raw;
     labels.push(data[i].date); deltas.push(d);
     colors.push(d >= 0 ? 'rgba(74,222,128,0.75)' : 'rgba(248,113,113,0.75)');
   }
