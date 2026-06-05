@@ -444,7 +444,7 @@ function fmt(n) { return fmtN(n, 1); }
 function sign(n) { return n >= 0 ? '+' : ''; }
 
 function convertArr(arr) {
-  return arr.map(v => v == null ? null : v);
+  return arr.map(v => v == null ? null : v / 1000);
 }
 
 function weekOfYear(dateStr) {
@@ -512,8 +512,11 @@ async function loadData() {
     const json = await apiFetch(url);
     const raw  = json?.response?.data;
     if (!raw?.length) throw new Error('No data returned from EIA.');
+    // EIA returns WGRSTUS1 in million bbl; all other stock series in thousand bbl.
+    // Multiply WGRSTUS1 by 1000 to normalise to thousand bbl so /1000 in rendering is consistent.
+    const scale = series === 'WGRSTUS1' ? 1000 : 1;
     cachedData = raw
-      .map(d => ({ date: d.period, value: parseFloat(d.value) }))
+      .map(d => ({ date: d.period, value: parseFloat(d.value) * scale }))
       .filter(d => !isNaN(d.value))
       .sort((a, b) => a.date.localeCompare(b.date));
     renderAll();
@@ -595,7 +598,7 @@ function renderHistoricChart(data, label, yearsBack) {
   if (mainChart) mainChart.destroy();
   mainChart = new Chart(canvas, {
     type: 'line',
-    data: { labels: visible.map(d => d.date), datasets: [{ label, data: visible.map(d => d.value), borderColor: '#4f6ef7', backgroundColor: 'rgba(79,110,247,0.1)', fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2 }] },
+    data: { labels: visible.map(d => d.date), datasets: [{ label, data: visible.map(d => d.value / 1000), borderColor: '#4f6ef7', backgroundColor: 'rgba(79,110,247,0.1)', fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2 }] },
     options: { ...BASE_OPT, plugins: { legend: LEGEND, tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)} million bbl` } } }, scales: { x: XSCALE, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmtN(v, 0) } } } },
   });
 }
@@ -607,7 +610,7 @@ function renderDeltaChart(data) {
   const labels = [], deltas = [], colors = [];
   for (let i = 1; i < data.length; i++) {
     const raw = data[i].value - data[i - 1].value;
-    const d   = raw;
+    const d   = raw / 1000;
     labels.push(data[i].date); deltas.push(d);
     colors.push(d >= 0 ? 'rgba(74,222,128,0.75)' : 'rgba(248,113,113,0.75)');
   }
