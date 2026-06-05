@@ -514,7 +514,7 @@ async function loadData() {
     if (!raw?.length) throw new Error('No data returned from EIA.');
     // EIA returns WGRSTUS1 in million bbl; all other stock series in thousand bbl.
     // Multiply WGRSTUS1 by 1000 to normalise to thousand bbl so /1000 in rendering is consistent.
-    const scale = series === 'WGRSTUS1' ? 1000 : 1;
+    const scale = series === 'WGRSTUS1' ? 10000 : 1;
     cachedData = raw
       .map(d => ({ date: d.period, value: parseFloat(d.value) * scale }))
       .filter(d => !isNaN(d.value))
