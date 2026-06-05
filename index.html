@@ -582,7 +582,7 @@ function renderSeasonalChart(s, label) {
         { label: String(s.currentYear), data: convertArr(s.currentLine), borderColor: '#f97316', backgroundColor: 'transparent', borderWidth: 2.5, fill: false, pointRadius: 3, pointHoverRadius: 6, tension: 0.3, spanGaps: false, order: 1 },
       ],
     },
-    options: { ...BASE_OPT, plugins: { legend: { ...LEGEND, labels: { ...LEGEND.labels, filter: i => i.datasetIndex !== 1 } }, tooltip: { callbacks: { label: ctx => ctx.parsed.y == null ? null : ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)} million bbl` } } }, scales: { x: XSCALE, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmt(v) } } } },
+    options: { ...BASE_OPT, plugins: { legend: { ...LEGEND, labels: { ...LEGEND.labels, filter: i => i.datasetIndex !== 1 } }, tooltip: { callbacks: { label: ctx => ctx.parsed.y == null ? null : ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)} million bbl` } } }, scales: { x: XSCALE, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmtN(v, 0) } } } },
   });
 }
 
@@ -596,7 +596,7 @@ function renderHistoricChart(data, label, yearsBack) {
   mainChart = new Chart(canvas, {
     type: 'line',
     data: { labels: visible.map(d => d.date), datasets: [{ label, data: visible.map(d => d.value / 1000), borderColor: '#4f6ef7', backgroundColor: 'rgba(79,110,247,0.1)', fill: true, tension: 0.3, pointRadius: 0, pointHoverRadius: 5, borderWidth: 2 }] },
-    options: { ...BASE_OPT, plugins: { legend: LEGEND, tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)} million bbl` } } }, scales: { x: XSCALE, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmt(v) } } } },
+    options: { ...BASE_OPT, plugins: { legend: LEGEND, tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)} million bbl` } } }, scales: { x: XSCALE, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmtN(v, 0) } } } },
   });
 }
 
@@ -614,7 +614,7 @@ function renderDeltaChart(data) {
   deltaChart = new Chart(canvas, {
     type: 'bar',
     data: { labels, datasets: [{ data: deltas, backgroundColor: colors, borderWidth: 0 }] },
-    options: { ...BASE_OPT, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${sign(ctx.parsed.y)}${fmt(ctx.parsed.y)} million bbl` } } }, scales: { x: { ...XSCALE, ticks: { ...XSCALE.ticks, maxTicksLimit: 14 }, grid: { display: false } }, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmt(v) } } } },
+    options: { ...BASE_OPT, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${sign(ctx.parsed.y)}${fmt(ctx.parsed.y)} million bbl` } } }, scales: { x: { ...XSCALE, ticks: { ...XSCALE.ticks, maxTicksLimit: 14 }, grid: { display: false } }, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmtN(v, 0) } } } },
   });
 }
 
