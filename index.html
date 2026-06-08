@@ -175,7 +175,7 @@
       <div class="toggle-group" id="seriesGrpCrude">
         <button data-val="WCRSTUS1" onclick="activateBtn(this);loadData()">Incl. SPR</button>
         <button data-val="WCESTUS1" class="active" onclick="activateBtn(this);loadData()">Excl. SPR</button>
-        <button data-val="WCSSTUS1" onclick="activateBtn(this);loadData()">SPR only</button>
+        <button data-val="WCSSTUS1" onclick="selectSPR(this)">SPR only</button>
       </div>
       <div class="toggle-group" id="seriesGrpProducts" style="display:none">
         <button data-val="WGRSTUS1" class="active" onclick="activateBtn(this);loadData()">Gasoline</button>
@@ -184,8 +184,8 @@
       </div>
 
       <div class="toggle-group" id="yearsGrp">
-        <button data-val="3"  onclick="activateBtn(this);loadData()">3y</button>
-        <button data-val="5"  class="active" onclick="activateBtn(this);loadData()">5y</button>
+        <button data-val="3"  class="active" onclick="activateBtn(this);loadData()">3y</button>
+        <button data-val="5"  onclick="activateBtn(this);loadData()">5y</button>
         <button data-val="10" onclick="activateBtn(this);loadData()">10y</button>
       </div>
 
@@ -498,6 +498,15 @@ function getActiveSeries() {
   const grp = document.getElementById('seriesGrpCrude').style.display !== 'none'
     ? 'seriesGrpCrude' : 'seriesGrpProducts';
   return getActiveVal(grp);
+}
+
+function selectSPR(btn) {
+  activateBtn(btn);
+  document.querySelectorAll('#yearsGrp button').forEach(b => b.classList.toggle('active', b.dataset.val === '10'));
+  chartMode = 'historic';
+  document.getElementById('btnSeasonal').classList.remove('active');
+  document.getElementById('btnHistoric').classList.add('active');
+  loadData();
 }
 
 
