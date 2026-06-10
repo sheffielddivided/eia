@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>F1 2026 • Sammenlagtstilling</title>
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="icon" href="apple-touch-icon.png" type="image/png" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+
+    header {
+      background: #1a1d27;
+      border-bottom: 1px solid #2d3148;
+      padding: 0.7rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+    }
+
+    .site-title { font-size: 0.95rem; font-weight: 600; color: #f1f5f9; }
+
+    .site-nav {
+      background: #1a1d27;
+      border-bottom: 1px solid #2d3148;
+      padding: 0 2rem;
+      display: flex;
+    }
+    .site-nav a {
+      color: #64748b;
+      text-decoration: none;
+      padding: 0.7rem 1.25rem;
+      font-size: 0.875rem;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .site-nav a:hover { color: #cbd5e1; }
+    .site-nav a.active { color: #f1f5f9; border-bottom-color: #e10600; font-weight: 600; }
+
+    main { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+    .page-header {
+      margin-bottom: 2rem;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .page-header h1 { font-size: 1.6rem; font-weight: 700; color: #f1f5f9; }
+    .page-header p  { font-size: 0.88rem; color: #64748b; margin-top: 0.2rem; }
+    .last-updated   { font-size: 0.78rem; color: #475569; }
+
+    .standings-card {
+      background: #1a1d27;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .standings-header {
+      display: grid;
+      grid-template-columns: 3rem 1fr 6rem 4rem;
+      gap: 1rem;
+      padding: 0.75rem 1.5rem;
+      border-bottom: 1px solid #2d3148;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: #475569;
+      text-transform: uppercase;
+    }
+
+    .driver-row {
+      display: grid;
+      grid-template-columns: 3rem 1fr 6rem 4rem;
+      gap: 1rem;
+      padding: 0.9rem 1.5rem;
+      border-bottom: 1px solid #1e2235;
+      align-items: center;
+      transition: background 0.15s;
+    }
+    .driver-row:last-child { border-bottom: none; }
+    .driver-row:hover { background: #1e2235; }
+
+    .pos-num {
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #f1f5f9;
+      text-align: center;
+    }
+    .pos-num.top3 { color: #fbbf24; }
+
+    .driver-info { display: flex; align-items: center; gap: 0.85rem; }
+    .team-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .driver-name  { font-size: 0.95rem; font-weight: 600; color: #f1f5f9; }
+    .team-name    { font-size: 0.78rem; color: #64748b; margin-top: 0.1rem; }
+
+    .points {
+      text-align: right;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #f1f5f9;
+    }
+    .points-label { font-size: 0.7rem; color: #475569; margin-top: 0.1rem; text-align: right; }
+
+    .change {
+      text-align: center;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .change.up   { color: #4ade80; }
+    .change.down { color: #f87171; }
+    .change.flat { color: #475569; }
+
+    .status {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #475569;
+      font-size: 0.9rem;
+    }
+    .spinner {
+      display: inline-block;
+      width: 28px; height: 28px;
+      border: 3px solid #2d3148;
+      border-top-color: #e10600;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-bottom: 0.75rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-box {
+      background: #2d1515;
+      border: 1px solid #7f1d1d;
+      color: #fca5a5;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      font-size: 0.875rem;
+      margin-bottom: 1rem;
+    }
+
+    .site-footer {
+      text-align: center;
+      padding: 1.5rem 2rem;
+      color: #475569;
+      font-size: 0.78rem;
+      border-top: 1px solid #1e2235;
+      margin-top: 0.5rem;
+    }
+    .site-footer a { color: #60a5fa; text-decoration: none; }
+    .site-footer a:hover { text-decoration: underline; }
+
+    @media (max-width: 540px) {
+      .standings-header,
+      .driver-row {
+        grid-template-columns: 2.5rem 1fr 5rem 3.5rem;
+        gap: 0.5rem;
+        padding: 0.75rem 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg" style="width:26px;height:26px;flex-shrink:0">
+    <rect x="4" y="16" width="32" height="10" rx="2" fill="#e10600"/>
+    <rect x="4" y="12" width="32" height="4" rx="1" fill="#fff"/>
+    <rect x="4" y="26" width="32" height="4" rx="1" fill="#fff"/>
+    <circle cx="11" cy="30" r="4" fill="#1a1d27" stroke="#64748b" stroke-width="1.5"/>
+    <circle cx="29" cy="30" r="4" fill="#1a1d27" stroke="#64748b" stroke-width="1.5"/>
+  </svg>
+  <span class="site-title">F1 2026 • Sammenlagtstilling</span>
+</header>
+
+<nav class="site-nav">
+  <a href="index.html">EIA Energy Data</a>
+  <a href="f1.html" class="active">F1 Standings</a>
+</nav>
+
+<main>
+  <div class="page-header">
+    <div>
+      <h1>Drivers' Championship</h1>
+      <p>Formula 1 2026 — Live fra OpenF1 API</p>
+    </div>
+    <div class="last-updated" id="lastUpdated"></div>
+  </div>
+
+  <div id="errorBox" style="display:none"></div>
+
+  <div class="standings-card">
+    <div class="standings-header">
+      <div style="text-align:center">Pos</div>
+      <div>Fører</div>
+      <div style="text-align:right">Poeng</div>
+      <div style="text-align:center">+/−</div>
+    </div>
+    <div id="standingsBody">
+      <div class="status">
+        <div class="spinner"></div><br>Henter data fra OpenF1…
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer class="site-footer">
+  Data: <a href="https://openf1.org" target="_blank" rel="noopener noreferrer">OpenF1 API</a>
+  · Oppdateres automatisk hvert 30. sekund
+</footer>
+
+<script>
+async function fetchStandings() {
+  try {
+    const [champRes, driversRes] = await Promise.all([
+      fetch('https://api.openf1.org/v1/championship_drivers?session_key=latest'),
+      fetch('https://api.openf1.org/v1/drivers?session_key=latest'),
+    ]);
+
+    if (!champRes.ok || !driversRes.ok) throw new Error(`API feil: ${champRes.status}`);
+
+    const [champData, driversData] = await Promise.all([champRes.json(), driversRes.json()]);
+
+    const driverMap = {};
+    driversData.forEach(d => { driverMap[d.driver_number] = d; });
+
+    if (!champData?.length) {
+      document.getElementById('standingsBody').innerHTML =
+        '<div class="status">Ingen data tilgjengelig.</div>';
+      return;
+    }
+
+    champData.sort((a, b) => a.position_current - b.position_current);
+
+    const rows = champData.map(entry => {
+      const driver = driverMap[entry.driver_number] || {};
+      const change = entry.position_current - entry.position_start;
+      const teamColor = driver.team_colour ? `#${driver.team_colour}` : '#64748b';
+      const isTop3 = entry.position_current <= 3;
+
+      let changeEl;
+      if (change < 0)      changeEl = `<span class="change up">▲ ${Math.abs(change)}</span>`;
+      else if (change > 0) changeEl = `<span class="change down">▼ ${change}</span>`;
+      else                 changeEl = `<span class="change flat">—</span>`;
+
+      return `
+        <div class="driver-row">
+          <div class="pos-num${isTop3 ? ' top3' : ''}">${entry.position_current}</div>
+          <div class="driver-info">
+            <div class="team-dot" style="background:${teamColor}"></div>
+            <div>
+              <div class="driver-name">${driver.full_name || `#${entry.driver_number}`}</div>
+              <div class="team-name">${driver.team_name || '—'}</div>
+            </div>
+          </div>
+          <div>
+            <div class="points">${entry.points_current}</div>
+            <div class="points-label">pts</div>
+          </div>
+          <div>${changeEl}</div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('standingsBody').innerHTML = rows;
+    document.getElementById('errorBox').style.display = 'none';
+    document.getElementById('lastUpdated').textContent =
+      'Oppdatert: ' + new Date().toLocaleString('nb-NO');
+
+  } catch (err) {
+    console.error(err);
+    const box = document.getElementById('errorBox');
+    box.className = 'error-box';
+    box.textContent = 'Kunne ikke hente data: ' + err.message;
+    box.style.display = 'block';
+    if (document.getElementById('standingsBody').querySelector('.spinner')) {
+      document.getElementById('standingsBody').innerHTML =
+        '<div class="status">Ingen data tilgjengelig.</div>';
+    }
+  }
+}
+
+fetchStandings();
+setInterval(fetchStandings, 30000);
+</script>
+</body>
+</html>
