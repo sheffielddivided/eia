@@ -200,8 +200,8 @@
 </div>
 
 <h2 class="section-heading">
-    Europeisk gasforsyning – rørledning og LNG
-    <span>14-dagers glidende snitt &middot; GWh/dag &middot; EU total &middot; Stiplet = 5-årssnitt</span>
+    LNG import og lagertrekk – EU total
+    <span>14-dagers glidende snitt &middot; GWh/dag &middot; Stiplet = 5-årssnitt</span>
 </h2>
 
 <div class="card">
@@ -217,9 +217,8 @@
 </div>
 
 <footer>
-    Kilde: <a href="https://agsi.gie.eu" target="_blank" rel="noopener">AGSI+</a> (gasslager),
-    <a href="https://alsi.gie.eu" target="_blank" rel="noopener">ALSI+</a> (LNG) og
-    <a href="https://iip.gie.eu" target="_blank" rel="noopener">IIP</a> (rørledning) / Gas Infrastructure Europe.
+    Kilde: <a href="https://agsi.gie.eu" target="_blank" rel="noopener">AGSI+</a> (gasslager og lagertrekk) og
+    <a href="https://alsi.gie.eu" target="_blank" rel="noopener">ALSI+</a> (LNG import) / Gas Infrastructure Europe.
     Oppdateres daglig med 1&ndash;2 dagers forsinkelse.
 </footer>
 
@@ -561,8 +560,8 @@ async function fetchAlsiYear(selKey, year) {
         const dateStr = r.gasDayStart || r.gas_day || r.date || '';
         if (!dateStr) continue;
         const mmdd = dateStr.slice(5, 10);
-        // withdrawal = LNG send-out/regasification into gas network
-        const val = parseFloat(r.withdrawal ?? r.sendOut ?? r.send ?? NaN);
+        // sendOut = LNG regasification / send-out into gas network (ALSI field)
+        const val = parseFloat(r.sendOut ?? r.send ?? NaN);
         if (!isNaN(val)) map[mmdd] = val;
     }
 
@@ -789,41 +788,39 @@ document.getElementById('lng-controls').addEventListener('click', e => {
     loadAndRenderLng(btn.dataset.key);
 });
 
-// ── Supply mix: IIP (pipeline) + ALSI (LNG) for EU ─────────────────────────
+// ── Supply: Storage withdrawal (AGSI) + LNG send-out (ALSI) for EU ──────────
+// Note: GIE's IIP API contains only infrastructure unavailability messages,
+// not physical pipeline flow data, so pipeline imports are not available here.
 
-const IIP_URL  = 'https://iip.gie.eu/api';
-const iipCache = {};
+const agsiFlowCache = {};
 let supplyChartInstance = null;
 
-async function fetchIipYear(year) {
-    const id = `iip-${year}`;
-    if (iipCache[id]) return iipCache[id];
+async function fetchAgsiFlowYear(year) {
+    const id = `agsi-flow-${year}`;
+    if (agsiFlowCache[id]) return agsiFlowCache[id];
 
     const from = `${year}-01-01`;
     const to   = year === CUR_YEAR ? new Date().toISOString().slice(0,10) : `${year}-12-31`;
     const params = new URLSearchParams({ from, to, size: '400', type: 'eu' });
-    const url = `${IIP_URL}?${params}`;
+    const url = `${BASE_URL}?${params}`;
 
     const resp = await fetch(url, { headers: { 'x-key': API_KEY } });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status} fra IIP API (${year})`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} fra AGSI API (eu-trekk/${year})`);
 
     const json = await resp.json();
     const records = Array.isArray(json.data) ? json.data : [];
-    console.log(`[IIP] eu/${year}: ${records.length} records`, records[0] ?? '(tom)');
+    console.log(`[AGSI-flow] eu/${year}: ${records.length} records`, records[0] ?? '(tom)');
 
     const map = {};
     for (const r of records) {
         const dateStr = r.gasDayStart || r.gas_day || r.date || '';
         if (!dateStr) continue;
         const mmdd = dateStr.slice(5, 10);
-        // Try common field names for physical pipeline flow
-        const val = parseFloat(
-            r.physicalFlow ?? r.physical ?? r.flow ?? r.import ?? r.value ?? NaN
-        );
-        if (!isNaN(val)) map[mmdd] = val;
+        const withdrawal = parseFloat(r.withdrawal ?? NaN);
+        if (!isNaN(withdrawal)) map[mmdd] = withdrawal;
     }
 
-    iipCache[id] = map;
+    agsiFlowCache[id] = map;
     return map;
 }
 
@@ -837,50 +834,40 @@ async function loadAndRenderSupply() {
     statsEl.innerHTML = '';
 
     try {
-        // Fetch IIP (pipeline) — LNG reuses lngCache from the chart above
-        const [iipCur, ...iipHist] = await Promise.all([
-            fetchIipYear(CUR_YEAR),
-            ...HIST_YEARS.map(y => fetchIipYear(y)),
+        const [wdCur, ...wdHist] = await Promise.all([
+            fetchAgsiFlowYear(CUR_YEAR),
+            ...HIST_YEARS.map(y => fetchAgsiFlowYear(y)),
         ]);
         const [lngCur, ...lngHist] = await Promise.all([
             fetchAlsiYear('eu', CUR_YEAR),
             ...HIST_YEARS.map(y => fetchAlsiYear('eu', y)),
         ]);
 
-        // Raw aligned arrays
-        const iipCurRaw  = DAY_KEYS.map(k => iipCur[k]  ?? null);
-        const lngCurRaw  = DAY_KEYS.map(k => lngCur[k]  ?? null);
-        const iipHistRaw = iipHist.map(m => DAY_KEYS.map(k => m[k] ?? null));
+        const wdCurRaw   = DAY_KEYS.map(k => wdCur[k]  ?? null);
+        const lngCurRaw  = DAY_KEYS.map(k => lngCur[k] ?? null);
+        const wdHistRaw  = wdHist.map(m  => DAY_KEYS.map(k => m[k] ?? null));
         const lngHistRaw = lngHist.map(m => DAY_KEYS.map(k => m[k] ?? null));
 
-        // 14-day rolling avg for current year
-        const iipSmooth = rollingAvg(iipCurRaw);
+        const wdSmooth  = rollingAvg(wdCurRaw);
         const lngSmooth = rollingAvg(lngCurRaw);
 
-        // 5-year daily average (mean, not min/max) for each metric
-        const iipAvg = DAY_KEYS.map((_, i) => {
-            const vals = iipHistRaw.map(arr => arr[i]).filter(v => v != null);
+        const wdAvg = DAY_KEYS.map((_, i) => {
+            const vals = wdHistRaw.map(arr => arr[i]).filter(v => v != null);
             return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
         });
         const lngAvg = DAY_KEYS.map((_, i) => {
             const vals = lngHistRaw.map(arr => arr[i]).filter(v => v != null);
             return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
         });
-        const iipAvgSmooth = rollingAvg(iipAvg);
+        const wdAvgSmooth  = rollingAvg(wdAvg);
         const lngAvgSmooth = rollingAvg(lngAvg);
 
         const now      = new Date();
         const todayKey = String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
         const todayIdx = DAY_KEYS.indexOf(todayKey);
 
-        const iipEmpty = iipSmooth.every(v => v == null);
-        if (iipEmpty) {
-            errorEl.textContent = 'IIP-APIet returnerte ingen rørledningsdata for type=eu. Se konsoll for API-respons.';
-            errorEl.style.display = 'block';
-        }
-
-        renderSupplyChart(iipSmooth, lngSmooth, iipAvgSmooth, lngAvgSmooth, todayIdx);
-        renderSupplyStats(iipSmooth, lngSmooth, iipAvgSmooth, lngAvgSmooth);
+        renderSupplyChart(wdSmooth, lngSmooth, wdAvgSmooth, lngAvgSmooth, todayIdx);
+        renderSupplyStats(wdSmooth, lngSmooth, wdAvgSmooth, lngAvgSmooth);
     } catch (err) {
         errorEl.textContent = `Feil: ${err.message}`;
         errorEl.style.display = 'block';
@@ -890,7 +877,7 @@ async function loadAndRenderSupply() {
     }
 }
 
-function renderSupplyChart(iipCur, lngCur, iipAvg, lngAvg, todayIdx) {
+function renderSupplyChart(wdCur, lngCur, wdAvg, lngAvg, todayIdx) {
     const ctx = document.getElementById('supplyChart').getContext('2d');
     if (supplyChartInstance) supplyChartInstance.destroy();
 
@@ -904,38 +891,34 @@ function renderSupplyChart(iipCur, lngCur, iipAvg, lngAvg, todayIdx) {
         data: {
             labels: xLabels,
             datasets: [
-                // Stacked filled areas for current year
                 {
-                    label: `Rørledning ${CUR_YEAR}`,
-                    data: iipCur,
+                    label: `Lagertrekk ${CUR_YEAR}`,
+                    data: wdCur,
                     borderColor: '#2dd4bf',
-                    backgroundColor: 'rgba(45,212,191,0.35)',
+                    backgroundColor: 'rgba(45,212,191,0.25)',
                     pointRadius: 0,
                     borderWidth: 2,
                     fill: 'origin',
                     tension: 0.3,
                     spanGaps: false,
-                    stack: 'cur',
                     order: 2,
                 },
                 {
-                    label: `LNG ${CUR_YEAR}`,
+                    label: `LNG import ${CUR_YEAR}`,
                     data: lngCur,
                     borderColor: '#e6b317',
-                    backgroundColor: 'rgba(230,179,23,0.35)',
+                    backgroundColor: 'rgba(230,179,23,0.25)',
                     pointRadius: 0,
                     borderWidth: 2,
                     fill: 'origin',
                     tension: 0.3,
                     spanGaps: false,
-                    stack: 'cur',
                     order: 2,
                 },
-                // 5-year average lines (dashed, no fill)
                 {
-                    label: `Rørledning ${avgLabel}`,
-                    data: iipAvg,
-                    borderColor: 'rgba(45,212,191,0.55)',
+                    label: `Lagertrekk ${avgLabel}`,
+                    data: wdAvg,
+                    borderColor: 'rgba(45,212,191,0.6)',
                     backgroundColor: 'transparent',
                     pointRadius: 0,
                     borderWidth: 1.5,
@@ -948,7 +931,7 @@ function renderSupplyChart(iipCur, lngCur, iipAvg, lngAvg, todayIdx) {
                 {
                     label: `LNG ${avgLabel}`,
                     data: lngAvg,
-                    borderColor: 'rgba(230,179,23,0.55)',
+                    borderColor: 'rgba(230,179,23,0.6)',
                     backgroundColor: 'transparent',
                     pointRadius: 0,
                     borderWidth: 1.5,
@@ -1014,7 +997,6 @@ function renderSupplyChart(iipCur, lngCur, iipAvg, lngAvg, todayIdx) {
                 },
                 y: {
                     min: 0,
-                    stacked: false,
                     grid: { color: '#21262d' },
                     ticks: {
                         color: '#8b949e', font: { size: 11 },
@@ -1030,39 +1012,35 @@ function renderSupplyChart(iipCur, lngCur, iipAvg, lngAvg, todayIdx) {
     });
 }
 
-function renderSupplyStats(iipCur, lngCur, iipAvg, lngAvg) {
+function renderSupplyStats(wdCur, lngCur, wdAvg, lngAvg) {
     let latestIdx = -1;
-    for (let i = iipCur.length - 1; i >= 0; i--) {
-        if (iipCur[i] != null || lngCur[i] != null) { latestIdx = i; break; }
+    for (let i = wdCur.length - 1; i >= 0; i--) {
+        if (wdCur[i] != null || lngCur[i] != null) { latestIdx = i; break; }
     }
     if (latestIdx < 0) return;
 
-    const iipVal = iipCur[latestIdx], lngVal = lngCur[latestIdx];
-    const total  = (iipVal ?? 0) + (lngVal ?? 0);
-    const iipPct = total > 0 ? ((iipVal ?? 0) / total * 100).toFixed(0) : '—';
-    const lngPct = total > 0 ? ((lngVal ?? 0) / total * 100).toFixed(0) : '—';
+    const wdVal  = wdCur[latestIdx],  lngVal  = lngCur[latestIdx];
+    const wdAvgV = wdAvg[latestIdx],  lngAvgV = lngAvg[latestIdx];
     const dateStr = DAY_KEYS[latestIdx];
-
-    const iipAvgVal = iipAvg[latestIdx], lngAvgVal = lngAvg[latestIdx];
 
     document.getElementById('supplyStatsGrid').innerHTML = `
         <div class="stat">
-            <div class="stat-label">Rørledning (${dateStr})</div>
-            <div class="stat-value" style="color:#2dd4bf">${iipVal != null ? Math.round(iipVal) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
-            <div class="stat-sub">${iipPct !== '—' ? iipPct+'% av vist total' : ''}</div>
+            <div class="stat-label">Lagertrekk (${dateStr})</div>
+            <div class="stat-value" style="color:#2dd4bf">${wdVal != null ? Math.round(wdVal) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
+            <div class="stat-sub">14-dagers snitt</div>
         </div>
         <div class="stat">
-            <div class="stat-label">LNG (${dateStr})</div>
+            <div class="stat-label">LNG import (${dateStr})</div>
             <div class="stat-value" style="color:#e6b317">${lngVal != null ? Math.round(lngVal) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
-            <div class="stat-sub">${lngPct !== '—' ? lngPct+'% av vist total' : ''}</div>
+            <div class="stat-sub">14-dagers snitt</div>
         </div>
         <div class="stat">
-            <div class="stat-label">5-årssnitt rørledning</div>
-            <div class="stat-value">${iipAvgVal != null ? Math.round(iipAvgVal) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
+            <div class="stat-label">5-årssnitt lagertrekk</div>
+            <div class="stat-value">${wdAvgV != null ? Math.round(wdAvgV) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
         </div>
         <div class="stat">
             <div class="stat-label">5-årssnitt LNG</div>
-            <div class="stat-value">${lngAvgVal != null ? Math.round(lngAvgVal) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
+            <div class="stat-value">${lngAvgV != null ? Math.round(lngAvgV) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
         </div>
     `;
 }
