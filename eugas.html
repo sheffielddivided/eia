@@ -186,7 +186,7 @@ const DAY_KEYS = (() => {
 })();
 
 const SELECTIONS = {
-    eu: { label: 'Europa (total)', country: null },   // no country param = EU aggregate
+    eu: { label: 'Europa (total)', type: 'eu' },  // type=eu gives EU aggregate
     de: { label: 'Tyskland',       country: 'DE' },
     it: { label: 'Italia',         country: 'IT' },
     nl: { label: 'Nederland',      country: 'NL' },
@@ -208,6 +208,7 @@ async function fetchYear(selKey, year) {
 
     const params = new URLSearchParams({ from, to, size: '400' });
     if (sel.country) params.set('country', sel.country);
+    if (sel.type)    params.set('type', sel.type);
     const url = `${BASE_URL}?${params}`;
 
     const resp = await fetch(url, { headers: { 'x-key': API_KEY } });
