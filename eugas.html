@@ -199,9 +199,27 @@
     <div class="stats-grid" id="lngStatsGrid"></div>
 </div>
 
+<h2 class="section-heading">
+    Europeisk gasforsyning – rørledning og LNG
+    <span>14-dagers glidende snitt &middot; GWh/dag &middot; EU total &middot; Stiplet = 5-årssnitt</span>
+</h2>
+
+<div class="card">
+    <div class="chart-wrapper">
+        <canvas id="supplyChart"></canvas>
+        <div class="loading-overlay" id="supplyLoading">
+            <div class="spinner"></div>
+            Laster data&hellip;
+        </div>
+    </div>
+    <div class="error-box" id="supplyErrorBox"></div>
+    <div class="stats-grid" id="supplyStatsGrid"></div>
+</div>
+
 <footer>
-    Kilde: <a href="https://agsi.gie.eu" target="_blank" rel="noopener">AGSI+</a> (gasslager) og
-    <a href="https://alsi.gie.eu" target="_blank" rel="noopener">ALSI+</a> (LNG) / Gas Infrastructure Europe.
+    Kilde: <a href="https://agsi.gie.eu" target="_blank" rel="noopener">AGSI+</a> (gasslager),
+    <a href="https://alsi.gie.eu" target="_blank" rel="noopener">ALSI+</a> (LNG) og
+    <a href="https://iip.gie.eu" target="_blank" rel="noopener">IIP</a> (rørledning) / Gas Infrastructure Europe.
     Oppdateres daglig med 1&ndash;2 dagers forsinkelse.
 </footer>
 
@@ -771,8 +789,287 @@ document.getElementById('lng-controls').addEventListener('click', e => {
     loadAndRenderLng(btn.dataset.key);
 });
 
+// ── Supply mix: IIP (pipeline) + ALSI (LNG) for EU ─────────────────────────
+
+const IIP_URL  = 'https://iip.gie.eu/api';
+const iipCache = {};
+let supplyChartInstance = null;
+
+async function fetchIipYear(year) {
+    const id = `iip-${year}`;
+    if (iipCache[id]) return iipCache[id];
+
+    const from = `${year}-01-01`;
+    const to   = year === CUR_YEAR ? new Date().toISOString().slice(0,10) : `${year}-12-31`;
+    const params = new URLSearchParams({ from, to, size: '400', type: 'eu' });
+    const url = `${IIP_URL}?${params}`;
+
+    const resp = await fetch(url, { headers: { 'x-key': API_KEY } });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} fra IIP API (${year})`);
+
+    const json = await resp.json();
+    const records = Array.isArray(json.data) ? json.data : [];
+    console.log(`[IIP] eu/${year}: ${records.length} records`, records[0] ?? '(tom)');
+
+    const map = {};
+    for (const r of records) {
+        const dateStr = r.gasDayStart || r.gas_day || r.date || '';
+        if (!dateStr) continue;
+        const mmdd = dateStr.slice(5, 10);
+        // Try common field names for physical pipeline flow
+        const val = parseFloat(
+            r.physicalFlow ?? r.physical ?? r.flow ?? r.import ?? r.value ?? NaN
+        );
+        if (!isNaN(val)) map[mmdd] = val;
+    }
+
+    iipCache[id] = map;
+    return map;
+}
+
+async function loadAndRenderSupply() {
+    const loadingEl = document.getElementById('supplyLoading');
+    const errorEl   = document.getElementById('supplyErrorBox');
+    const statsEl   = document.getElementById('supplyStatsGrid');
+
+    loadingEl.classList.remove('hidden');
+    errorEl.style.display = 'none';
+    statsEl.innerHTML = '';
+
+    try {
+        // Fetch IIP (pipeline) — LNG reuses lngCache from the chart above
+        const [iipCur, ...iipHist] = await Promise.all([
+            fetchIipYear(CUR_YEAR),
+            ...HIST_YEARS.map(y => fetchIipYear(y)),
+        ]);
+        const [lngCur, ...lngHist] = await Promise.all([
+            fetchAlsiYear('eu', CUR_YEAR),
+            ...HIST_YEARS.map(y => fetchAlsiYear('eu', y)),
+        ]);
+
+        // Raw aligned arrays
+        const iipCurRaw  = DAY_KEYS.map(k => iipCur[k]  ?? null);
+        const lngCurRaw  = DAY_KEYS.map(k => lngCur[k]  ?? null);
+        const iipHistRaw = iipHist.map(m => DAY_KEYS.map(k => m[k] ?? null));
+        const lngHistRaw = lngHist.map(m => DAY_KEYS.map(k => m[k] ?? null));
+
+        // 14-day rolling avg for current year
+        const iipSmooth = rollingAvg(iipCurRaw);
+        const lngSmooth = rollingAvg(lngCurRaw);
+
+        // 5-year daily average (mean, not min/max) for each metric
+        const iipAvg = DAY_KEYS.map((_, i) => {
+            const vals = iipHistRaw.map(arr => arr[i]).filter(v => v != null);
+            return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+        });
+        const lngAvg = DAY_KEYS.map((_, i) => {
+            const vals = lngHistRaw.map(arr => arr[i]).filter(v => v != null);
+            return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+        });
+        const iipAvgSmooth = rollingAvg(iipAvg);
+        const lngAvgSmooth = rollingAvg(lngAvg);
+
+        const now      = new Date();
+        const todayKey = String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+        const todayIdx = DAY_KEYS.indexOf(todayKey);
+
+        const iipEmpty = iipSmooth.every(v => v == null);
+        if (iipEmpty) {
+            errorEl.textContent = 'IIP-APIet returnerte ingen rørledningsdata for type=eu. Se konsoll for API-respons.';
+            errorEl.style.display = 'block';
+        }
+
+        renderSupplyChart(iipSmooth, lngSmooth, iipAvgSmooth, lngAvgSmooth, todayIdx);
+        renderSupplyStats(iipSmooth, lngSmooth, iipAvgSmooth, lngAvgSmooth);
+    } catch (err) {
+        errorEl.textContent = `Feil: ${err.message}`;
+        errorEl.style.display = 'block';
+        console.error(err);
+    } finally {
+        loadingEl.classList.add('hidden');
+    }
+}
+
+function renderSupplyChart(iipCur, lngCur, iipAvg, lngAvg, todayIdx) {
+    const ctx = document.getElementById('supplyChart').getContext('2d');
+    if (supplyChartInstance) supplyChartInstance.destroy();
+
+    const xLabels  = DAY_KEYS.map(k =>
+        k.endsWith('-01') ? MONTHS[parseInt(k.slice(0,2))-1] : ''
+    );
+    const avgLabel = `Snitt ${HIST_YEARS[0]}–${HIST_YEARS[HIST_YEARS.length-1]}`;
+
+    supplyChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: xLabels,
+            datasets: [
+                // Stacked filled areas for current year
+                {
+                    label: `Rørledning ${CUR_YEAR}`,
+                    data: iipCur,
+                    borderColor: '#2dd4bf',
+                    backgroundColor: 'rgba(45,212,191,0.35)',
+                    pointRadius: 0,
+                    borderWidth: 2,
+                    fill: 'origin',
+                    tension: 0.3,
+                    spanGaps: false,
+                    stack: 'cur',
+                    order: 2,
+                },
+                {
+                    label: `LNG ${CUR_YEAR}`,
+                    data: lngCur,
+                    borderColor: '#e6b317',
+                    backgroundColor: 'rgba(230,179,23,0.35)',
+                    pointRadius: 0,
+                    borderWidth: 2,
+                    fill: 'origin',
+                    tension: 0.3,
+                    spanGaps: false,
+                    stack: 'cur',
+                    order: 2,
+                },
+                // 5-year average lines (dashed, no fill)
+                {
+                    label: `Rørledning ${avgLabel}`,
+                    data: iipAvg,
+                    borderColor: 'rgba(45,212,191,0.55)',
+                    backgroundColor: 'transparent',
+                    pointRadius: 0,
+                    borderWidth: 1.5,
+                    borderDash: [5, 4],
+                    fill: false,
+                    tension: 0.3,
+                    spanGaps: true,
+                    order: 3,
+                },
+                {
+                    label: `LNG ${avgLabel}`,
+                    data: lngAvg,
+                    borderColor: 'rgba(230,179,23,0.55)',
+                    backgroundColor: 'transparent',
+                    pointRadius: 0,
+                    borderWidth: 1.5,
+                    borderDash: [5, 4],
+                    fill: false,
+                    tension: 0.3,
+                    spanGaps: true,
+                    order: 3,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: {
+                        color: '#8b949e',
+                        boxWidth: 14, boxHeight: 14, padding: 12,
+                        font: { size: 11 },
+                    },
+                },
+                tooltip: {
+                    backgroundColor: '#1c2129',
+                    borderColor: '#30363d',
+                    borderWidth: 1,
+                    titleColor: '#8b949e',
+                    bodyColor: '#c9d1d9',
+                    callbacks: {
+                        title: items => DAY_KEYS[items[0].dataIndex] || '',
+                        label: item => {
+                            if (item.raw == null) return null;
+                            return `  ${item.dataset.label}: ${Math.round(item.raw)} GWh/d`;
+                        },
+                    },
+                },
+                annotation: {
+                    annotations: todayIdx >= 0 ? {
+                        todayLine: {
+                            type: 'line',
+                            xMin: todayIdx, xMax: todayIdx,
+                            borderColor: 'rgba(200,200,200,0.3)',
+                            borderWidth: 1, borderDash: [4, 4],
+                            label: {
+                                display: true, content: 'I dag', color: '#8b949e',
+                                font: { size: 10 }, position: 'start',
+                                backgroundColor: 'transparent', padding: 2,
+                            },
+                        },
+                    } : {},
+                },
+            },
+            scales: {
+                x: {
+                    grid: { color: '#21262d', tickLength: 0 },
+                    ticks: {
+                        color: '#8b949e', font: { size: 11 },
+                        maxRotation: 0, autoSkip: false,
+                        callback: (_, idx) => xLabels[idx] || null,
+                    },
+                },
+                y: {
+                    min: 0,
+                    stacked: false,
+                    grid: { color: '#21262d' },
+                    ticks: {
+                        color: '#8b949e', font: { size: 11 },
+                        callback: v => v >= 1000 ? (v/1000).toFixed(1)+'k' : v,
+                    },
+                    title: {
+                        display: true, text: 'GWh/dag',
+                        color: '#8b949e', font: { size: 11 },
+                    },
+                },
+            },
+        },
+    });
+}
+
+function renderSupplyStats(iipCur, lngCur, iipAvg, lngAvg) {
+    let latestIdx = -1;
+    for (let i = iipCur.length - 1; i >= 0; i--) {
+        if (iipCur[i] != null || lngCur[i] != null) { latestIdx = i; break; }
+    }
+    if (latestIdx < 0) return;
+
+    const iipVal = iipCur[latestIdx], lngVal = lngCur[latestIdx];
+    const total  = (iipVal ?? 0) + (lngVal ?? 0);
+    const iipPct = total > 0 ? ((iipVal ?? 0) / total * 100).toFixed(0) : '—';
+    const lngPct = total > 0 ? ((lngVal ?? 0) / total * 100).toFixed(0) : '—';
+    const dateStr = DAY_KEYS[latestIdx];
+
+    const iipAvgVal = iipAvg[latestIdx], lngAvgVal = lngAvg[latestIdx];
+
+    document.getElementById('supplyStatsGrid').innerHTML = `
+        <div class="stat">
+            <div class="stat-label">Rørledning (${dateStr})</div>
+            <div class="stat-value" style="color:#2dd4bf">${iipVal != null ? Math.round(iipVal) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
+            <div class="stat-sub">${iipPct !== '—' ? iipPct+'% av vist total' : ''}</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">LNG (${dateStr})</div>
+            <div class="stat-value" style="color:#e6b317">${lngVal != null ? Math.round(lngVal) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
+            <div class="stat-sub">${lngPct !== '—' ? lngPct+'% av vist total' : ''}</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">5-årssnitt rørledning</div>
+            <div class="stat-value">${iipAvgVal != null ? Math.round(iipAvgVal) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">5-årssnitt LNG</div>
+            <div class="stat-value">${lngAvgVal != null ? Math.round(lngAvgVal) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
+        </div>
+    `;
+}
+
 loadAndRender('eu');
 loadAndRenderLng('eu');
+loadAndRenderSupply();
 </script>
 </body>
 </html>
