@@ -125,6 +125,20 @@
         .stat-value { font-size: 1.45rem; font-weight: 600; letter-spacing: -.02em; }
         .stat-sub { font-size: .72rem; color: var(--muted); margin-top: .15rem; }
 
+        .section-heading {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text);
+            margin: 2rem 0 1.1rem;
+            padding-bottom: .6rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .section-heading span {
+            font-size: .75rem;
+            font-weight: 400;
+            color: var(--muted);
+            margin-left: .6rem;
+        }
         footer {
             margin-top: 1.25rem;
             font-size: .72rem;
@@ -160,8 +174,34 @@
     <div class="stats-grid" id="statsGrid"></div>
 </div>
 
+<h2 class="section-heading">
+    LNG import – send-out (regassifisering)
+    <span>14-dagers glidende snitt &middot; GWh/dag</span>
+</h2>
+
+<div class="controls" id="lng-controls">
+    <button class="btn active" data-key="eu">Europa (total)</button>
+    <button class="btn" data-key="es">Spania</button>
+    <button class="btn" data-key="fr">Frankrike</button>
+    <button class="btn" data-key="it">Italia</button>
+    <button class="btn" data-key="nl">Nederland</button>
+</div>
+
+<div class="card">
+    <div class="chart-wrapper">
+        <canvas id="lngChart"></canvas>
+        <div class="loading-overlay" id="lngLoading">
+            <div class="spinner"></div>
+            Laster data&hellip;
+        </div>
+    </div>
+    <div class="error-box" id="lngErrorBox"></div>
+    <div class="stats-grid" id="lngStatsGrid"></div>
+</div>
+
 <footer>
-    Kilde: <a href="https://agsi.gie.eu" target="_blank" rel="noopener">AGSI+ / Gas Infrastructure Europe</a>.
+    Kilde: <a href="https://agsi.gie.eu" target="_blank" rel="noopener">AGSI+</a> (gasslager) og
+    <a href="https://alsi.gie.eu" target="_blank" rel="noopener">ALSI+</a> (LNG) / Gas Infrastructure Europe.
     Oppdateres daglig med 1&ndash;2 dagers forsinkelse.
 </footer>
 
@@ -453,7 +493,286 @@ document.getElementById('controls').addEventListener('click', e => {
     loadAndRender(btn.dataset.key);
 });
 
+// ── LNG (ALSI) ─────────────────────────────────────────────────────────────
+
+const ALSI_URL = 'https://alsi.gie.eu/api';
+const LNG_SELECTIONS = {
+    eu: { label: 'Europa (total)', type: 'eu' },
+    es: { label: 'Spania',         country: 'ES' },
+    fr: { label: 'Frankrike',      country: 'FR' },
+    it: { label: 'Italia',         country: 'IT' },
+    nl: { label: 'Nederland',      country: 'NL' },
+};
+
+const lngCache = {};
+let lngChartInstance = null;
+
+function rollingAvg(arr, window = 14) {
+    const half = Math.floor(window / 2);
+    return arr.map((_, i) => {
+        const slice = arr.slice(Math.max(0, i - half), Math.min(arr.length, i + half + 1))
+                        .filter(v => v != null);
+        return slice.length >= Math.ceil(window / 3)
+            ? slice.reduce((a, b) => a + b, 0) / slice.length
+            : null;
+    });
+}
+
+async function fetchAlsiYear(selKey, year) {
+    const id = `lng-${selKey}-${year}`;
+    if (lngCache[id]) return lngCache[id];
+
+    const sel  = LNG_SELECTIONS[selKey];
+    const from = `${year}-01-01`;
+    const to   = year === CUR_YEAR ? new Date().toISOString().slice(0,10) : `${year}-12-31`;
+
+    const params = new URLSearchParams({ from, to, size: '400' });
+    if (sel.country) params.set('country', sel.country);
+    if (sel.type)    params.set('type', sel.type);
+    const url = `${ALSI_URL}?${params}`;
+
+    const resp = await fetch(url, { headers: { 'x-key': API_KEY } });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} fra ALSI API (${selKey}/${year})`);
+
+    const json = await resp.json();
+    const records = Array.isArray(json.data) ? json.data : [];
+    console.log(`[ALSI] ${selKey}/${year}: ${records.length} records`, records[0] ?? '(tom)');
+
+    const map = {};
+    for (const r of records) {
+        const dateStr = r.gasDayStart || r.gas_day || r.date || '';
+        if (!dateStr) continue;
+        const mmdd = dateStr.slice(5, 10);
+        // withdrawal = LNG send-out/regasification into gas network
+        const val = parseFloat(r.withdrawal ?? r.sendOut ?? r.send ?? NaN);
+        if (!isNaN(val)) map[mmdd] = val;
+    }
+
+    lngCache[id] = map;
+    return map;
+}
+
+async function loadAndRenderLng(selKey) {
+    const loadingEl = document.getElementById('lngLoading');
+    const errorEl   = document.getElementById('lngErrorBox');
+    const statsEl   = document.getElementById('lngStatsGrid');
+
+    loadingEl.classList.remove('hidden');
+    errorEl.style.display = 'none';
+    statsEl.innerHTML = '';
+
+    try {
+        const [curMap, ...histMaps] = await Promise.all([
+            fetchAlsiYear(selKey, CUR_YEAR),
+            ...HIST_YEARS.map(y => fetchAlsiYear(selKey, y)),
+        ]);
+
+        // Raw arrays aligned to DAY_KEYS
+        const curRaw  = DAY_KEYS.map(k => curMap[k] ?? null);
+        const histRaw = histMaps.map(m => DAY_KEYS.map(k => m[k] ?? null));
+
+        // Apply 14-day rolling average
+        const curSmooth  = rollingAvg(curRaw);
+        const histSmooth = histRaw.map(rollingAvg);
+
+        const minData = DAY_KEYS.map((_, i) => {
+            const vals = histSmooth.map(h => h[i]).filter(v => v != null);
+            return vals.length ? Math.min(...vals) : null;
+        });
+        const maxData = DAY_KEYS.map((_, i) => {
+            const vals = histSmooth.map(h => h[i]).filter(v => v != null);
+            return vals.length ? Math.max(...vals) : null;
+        });
+
+        const now      = new Date();
+        const todayKey = String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+        const todayIdx = DAY_KEYS.indexOf(todayKey);
+
+        renderLngChart(curSmooth, minData, maxData, todayIdx);
+        renderLngStats(curSmooth, curRaw, minData, maxData);
+    } catch (err) {
+        errorEl.textContent = `Feil ved henting av data: ${err.message}`;
+        errorEl.style.display = 'block';
+        console.error(err);
+    } finally {
+        loadingEl.classList.add('hidden');
+    }
+}
+
+function renderLngChart(curData, minData, maxData, todayIdx) {
+    const ctx = document.getElementById('lngChart').getContext('2d');
+    if (lngChartInstance) lngChartInstance.destroy();
+
+    const xLabels  = DAY_KEYS.map(k =>
+        k.endsWith('-01') ? MONTHS[parseInt(k.slice(0,2))-1] : ''
+    );
+    const histLabel = `Spenn ${HIST_YEARS[0]}–${HIST_YEARS[HIST_YEARS.length-1]}`;
+
+    lngChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: xLabels,
+            datasets: [
+                {
+                    label: '_max',
+                    data: maxData,
+                    borderColor: 'transparent',
+                    backgroundColor: 'rgba(230,179,23,0.18)',
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.35,
+                    spanGaps: true,
+                    order: 3,
+                },
+                {
+                    label: histLabel,
+                    data: minData,
+                    borderColor: 'transparent',
+                    backgroundColor: 'rgba(230,179,23,0.18)',
+                    pointRadius: 0,
+                    fill: '-1',
+                    tension: 0.35,
+                    spanGaps: true,
+                    order: 3,
+                },
+                {
+                    label: String(CUR_YEAR),
+                    data: curData,
+                    borderColor: '#e6b317',
+                    backgroundColor: 'transparent',
+                    pointRadius: 0,
+                    borderWidth: 2.5,
+                    fill: false,
+                    tension: 0.3,
+                    spanGaps: false,
+                    order: 1,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: {
+                        color: '#8b949e',
+                        boxWidth: 14, boxHeight: 14, padding: 16,
+                        font: { size: 12 },
+                        filter: item => !item.text.startsWith('_'),
+                    },
+                },
+                tooltip: {
+                    backgroundColor: '#1c2129',
+                    borderColor: '#30363d',
+                    borderWidth: 1,
+                    titleColor: '#8b949e',
+                    bodyColor: '#c9d1d9',
+                    callbacks: {
+                        title: items => DAY_KEYS[items[0].dataIndex] || '',
+                        label: item => {
+                            if (item.raw == null || item.dataset.label.startsWith('_')) return null;
+                            return `  ${item.dataset.label}: ${Math.round(item.raw)} GWh/d`;
+                        },
+                    },
+                },
+                annotation: {
+                    annotations: todayIdx >= 0 ? {
+                        todayLine: {
+                            type: 'line',
+                            xMin: todayIdx, xMax: todayIdx,
+                            borderColor: 'rgba(200,200,200,0.3)',
+                            borderWidth: 1,
+                            borderDash: [4, 4],
+                            label: {
+                                display: true, content: 'I dag',
+                                color: '#8b949e', font: { size: 10 },
+                                position: 'start', backgroundColor: 'transparent', padding: 2,
+                            },
+                        },
+                    } : {},
+                },
+            },
+            scales: {
+                x: {
+                    grid: { color: '#21262d', tickLength: 0 },
+                    ticks: {
+                        color: '#8b949e', font: { size: 11 },
+                        maxRotation: 0, autoSkip: false,
+                        callback: (_, idx) => xLabels[idx] || null,
+                    },
+                },
+                y: {
+                    min: 0,
+                    grid: { color: '#21262d' },
+                    ticks: {
+                        color: '#8b949e', font: { size: 11 },
+                        callback: v => v >= 1000 ? (v/1000).toFixed(1)+'k' : v,
+                    },
+                    title: {
+                        display: true, text: 'GWh/dag',
+                        color: '#8b949e', font: { size: 11 },
+                    },
+                },
+            },
+        },
+    });
+}
+
+function renderLngStats(smoothData, rawData, minData, maxData) {
+    // Find latest non-null smoothed value
+    let latestSmooth = null, latestIdx = -1;
+    for (let i = smoothData.length - 1; i >= 0; i--) {
+        if (smoothData[i] != null) { latestSmooth = smoothData[i]; latestIdx = i; break; }
+    }
+    if (latestSmooth == null) return;
+
+    // Latest raw value
+    let latestRaw = null;
+    for (let i = rawData.length - 1; i >= 0; i--) {
+        if (rawData[i] != null) { latestRaw = rawData[i]; break; }
+    }
+
+    const histMin = minData[latestIdx];
+    const histMax = maxData[latestIdx];
+    const dateStr = DAY_KEYS[latestIdx];
+
+    let statusColor = '#d29922', statusText = 'Innenfor 5-årsintervall';
+    if (histMin != null && latestSmooth < histMin) { statusColor = '#f85149'; statusText = 'Under 5-årsminimum'; }
+    else if (histMax != null && latestSmooth > histMax) { statusColor = '#3fb950'; statusText = 'Over 5-årsmaksimum'; }
+
+    document.getElementById('lngStatsGrid').innerHTML = `
+        <div class="stat">
+            <div class="stat-label">Siste (råverdi)</div>
+            <div class="stat-value">${latestRaw != null ? Math.round(latestRaw) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
+            <div class="stat-sub">Siste gasdag</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">14-dagers snitt (${dateStr})</div>
+            <div class="stat-value">${Math.round(latestSmooth)} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">5-årsmin snitt (${dateStr})</div>
+            <div class="stat-value">${histMin != null ? Math.round(histMin) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">Status</div>
+            <div class="stat-value" style="font-size:.95rem;line-height:1.3;color:${statusColor}">${statusText}</div>
+        </div>
+    `;
+}
+
+document.getElementById('lng-controls').addEventListener('click', e => {
+    const btn = e.target.closest('.btn[data-key]');
+    if (!btn) return;
+    document.querySelectorAll('#lng-controls .btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadAndRenderLng(btn.dataset.key);
+});
+
 loadAndRender('eu');
+loadAndRenderLng('eu');
 </script>
 </body>
 </html>
