@@ -250,43 +250,43 @@ const SELECTIONS = {
     fr: { label: 'Frankrike',      country: 'FR' },
 };
 
-const cache = {};
+// Promise-based caches: concurrent callers share a single in-flight request
+const agsiRequestCache = {};  // "selKey-year" → Promise<records[]>
+const alsiRequestCache = {};  // "selKey-year" → Promise<records[]>
+
 let chartInstance = null;
 
-async function fetchYear(selKey, year) {
+function fetchAgsiRecords(selKey, year) {
     const id = `${selKey}-${year}`;
-    if (cache[id]) return cache[id];
-
-    const sel  = SELECTIONS[selKey];
-    const from = `${year}-01-01`;
-    const to   = year === CUR_YEAR
-        ? new Date().toISOString().slice(0,10)
-        : `${year}-12-31`;
-
-    const params = new URLSearchParams({ from, to, size: '400' });
-    if (sel.country) params.set('country', sel.country);
-    if (sel.type)    params.set('type', sel.type);
-    const url = `${BASE_URL}?${params}`;
-
-    const resp = await fetch(url, { headers: { 'x-key': API_KEY } });
-    if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status} fra AGSI API (${selKey}/${year})`);
+    if (!agsiRequestCache[id]) {
+        const sel  = SELECTIONS[selKey];
+        const from = `${year}-01-01`;
+        const to   = year === CUR_YEAR ? new Date().toISOString().slice(0,10) : `${year}-12-31`;
+        const params = new URLSearchParams({ from, to, size: '400' });
+        if (sel.country) params.set('country', sel.country);
+        if (sel.type)    params.set('type', sel.type);
+        const url = `${BASE_URL}?${params}`;
+        agsiRequestCache[id] = fetch(url, { headers: { 'x-key': API_KEY } })
+            .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status} fra AGSI API (${selKey}/${year})`); return r.json(); })
+            .then(j => {
+                const recs = Array.isArray(j.data) ? j.data : [];
+                console.log(`[AGSI] ${selKey}/${year}: ${recs.length} records, url=${url}`, recs[0] ?? '(tom)');
+                return recs;
+            });
     }
+    return agsiRequestCache[id];
+}
 
-    const json = await resp.json();
-    const records = Array.isArray(json.data) ? json.data : [];
-    console.log(`[AGSI] ${selKey}/${year}: ${records.length} records, url=${url}`, records[0] ?? '(tom)');
-
+async function fetchYear(selKey, year) {
+    const records = await fetchAgsiRecords(selKey, year);
     const map = {};
     for (const r of records) {
         const dateStr = r.gasDayStart || r.gas_day || r.date || '';
         if (!dateStr) continue;
-        const mmdd = dateStr.slice(5, 10); // "YYYY-MM-DD" → "MM-DD"
+        const mmdd = dateStr.slice(5, 10);
         const val  = parseFloat(r.full);
         if (!isNaN(val)) map[mmdd] = val;
     }
-
-    cache[id] = map;
     return map;
 }
 
@@ -521,7 +521,6 @@ const LNG_SELECTIONS = {
     nl: { label: 'Nederland',      country: 'NL' },
 };
 
-const lngCache = {};
 let lngChartInstance = null;
 
 function rollingAvg(arr, window = 14) {
@@ -535,37 +534,37 @@ function rollingAvg(arr, window = 14) {
     });
 }
 
+function fetchAlsiRecords(selKey, year) {
+    const id = `${selKey}-${year}`;
+    if (!alsiRequestCache[id]) {
+        const sel  = LNG_SELECTIONS[selKey];
+        const from = `${year}-01-01`;
+        const to   = year === CUR_YEAR ? new Date().toISOString().slice(0,10) : `${year}-12-31`;
+        const params = new URLSearchParams({ from, to, size: '400' });
+        if (sel.country) params.set('country', sel.country);
+        if (sel.type)    params.set('type', sel.type);
+        const url = `${ALSI_URL}?${params}`;
+        alsiRequestCache[id] = fetch(url, { headers: { 'x-key': API_KEY } })
+            .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status} fra ALSI API (${selKey}/${year})`); return r.json(); })
+            .then(j => {
+                const recs = Array.isArray(j.data) ? j.data : [];
+                console.log(`[ALSI] ${selKey}/${year}: ${recs.length} records`, recs[0] ?? '(tom)');
+                return recs;
+            });
+    }
+    return alsiRequestCache[id];
+}
+
 async function fetchAlsiYear(selKey, year) {
-    const id = `lng-${selKey}-${year}`;
-    if (lngCache[id]) return lngCache[id];
-
-    const sel  = LNG_SELECTIONS[selKey];
-    const from = `${year}-01-01`;
-    const to   = year === CUR_YEAR ? new Date().toISOString().slice(0,10) : `${year}-12-31`;
-
-    const params = new URLSearchParams({ from, to, size: '400' });
-    if (sel.country) params.set('country', sel.country);
-    if (sel.type)    params.set('type', sel.type);
-    const url = `${ALSI_URL}?${params}`;
-
-    const resp = await fetch(url, { headers: { 'x-key': API_KEY } });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status} fra ALSI API (${selKey}/${year})`);
-
-    const json = await resp.json();
-    const records = Array.isArray(json.data) ? json.data : [];
-    console.log(`[ALSI] ${selKey}/${year}: ${records.length} records`, records[0] ?? '(tom)');
-
+    const records = await fetchAlsiRecords(selKey, year);
     const map = {};
     for (const r of records) {
         const dateStr = r.gasDayStart || r.gas_day || r.date || '';
         if (!dateStr) continue;
         const mmdd = dateStr.slice(5, 10);
-        // sendOut = LNG regasification / send-out into gas network (ALSI field)
         const val = parseFloat(r.sendOut ?? r.send ?? NaN);
         if (!isNaN(val)) map[mmdd] = val;
     }
-
-    lngCache[id] = map;
     return map;
 }
 
@@ -791,26 +790,13 @@ document.getElementById('lng-controls').addEventListener('click', e => {
 // ── Supply: Storage withdrawal (AGSI) + LNG send-out (ALSI) for EU ──────────
 // Note: GIE's IIP API contains only infrastructure unavailability messages,
 // not physical pipeline flow data, so pipeline imports are not available here.
+// fetchAgsiFlowYear reuses agsiRequestCache set by fetchYear — no extra API calls.
 
-const agsiFlowCache = {};
 let supplyChartInstance = null;
 
 async function fetchAgsiFlowYear(year) {
-    const id = `agsi-flow-${year}`;
-    if (agsiFlowCache[id]) return agsiFlowCache[id];
-
-    const from = `${year}-01-01`;
-    const to   = year === CUR_YEAR ? new Date().toISOString().slice(0,10) : `${year}-12-31`;
-    const params = new URLSearchParams({ from, to, size: '400', type: 'eu' });
-    const url = `${BASE_URL}?${params}`;
-
-    const resp = await fetch(url, { headers: { 'x-key': API_KEY } });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status} fra AGSI API (eu-trekk/${year})`);
-
-    const json = await resp.json();
-    const records = Array.isArray(json.data) ? json.data : [];
-    console.log(`[AGSI-flow] eu/${year}: ${records.length} records`, records[0] ?? '(tom)');
-
+    // Shares the same in-flight/cached AGSI EU request as the main storage chart
+    const records = await fetchAgsiRecords('eu', year);
     const map = {};
     for (const r of records) {
         const dateStr = r.gasDayStart || r.gas_day || r.date || '';
@@ -819,8 +805,6 @@ async function fetchAgsiFlowYear(year) {
         const withdrawal = parseFloat(r.withdrawal ?? NaN);
         if (!isNaN(withdrawal)) map[mmdd] = withdrawal;
     }
-
-    agsiFlowCache[id] = map;
     return map;
 }
 
