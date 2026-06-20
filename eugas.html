@@ -186,11 +186,11 @@ const DAY_KEYS = (() => {
 })();
 
 const SELECTIONS = {
-    eu: { label: 'Europa (total)', param: 'country=EU' },
-    de: { label: 'Tyskland',       param: 'country=DE' },
-    it: { label: 'Italia',         param: 'country=IT' },
-    nl: { label: 'Nederland',      param: 'country=NL' },
-    fr: { label: 'Frankrike',      param: 'country=FR' },
+    eu: { label: 'Europa (total)', country: null },   // no country param = EU aggregate
+    de: { label: 'Tyskland',       country: 'DE' },
+    it: { label: 'Italia',         country: 'IT' },
+    nl: { label: 'Nederland',      country: 'NL' },
+    fr: { label: 'Frankrike',      country: 'FR' },
 };
 
 const cache = {};
@@ -206,16 +206,18 @@ async function fetchYear(selKey, year) {
         ? new Date().toISOString().slice(0,10)
         : `${year}-12-31`;
 
-    // Fetch up to 400 records; AGSI daily data fits in one page for a year
-    const url = `${BASE_URL}?${sel.param}&from=${from}&to=${to}&size=400`;
-    const resp = await fetch(url, { headers: { 'x-key': API_KEY } });
+    const params = new URLSearchParams({ from, to, size: '400' });
+    if (sel.country) params.set('country', sel.country);
+    const url = `${BASE_URL}?${params}`;
 
+    const resp = await fetch(url, { headers: { 'x-key': API_KEY } });
     if (!resp.ok) {
         throw new Error(`HTTP ${resp.status} fra AGSI API (${selKey}/${year})`);
     }
 
     const json = await resp.json();
     const records = Array.isArray(json.data) ? json.data : [];
+    console.log(`[AGSI] ${selKey}/${year}: ${records.length} records, url=${url}`, records[0] ?? '(tom)');
 
     const map = {};
     for (const r of records) {
