@@ -1,0 +1,48 @@
+name: Update UMM data
+
+on:
+  schedule:
+    - cron: '15 * * * *'   # every hour at :15
+  workflow_dispatch:         # allow manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch active UMMs from IIP+
+        run: |
+          mkdir -p data
+          curl -sf --max-time 30 \
+            "https://iip.gie.eu/api?message=withdrawal&status=active&size=200" \
+            -o data/umm-wd.json \
+            || echo '{"data":[]}' > data/umm-wd.json
+
+          curl -sf --max-time 30 \
+            "https://iip.gie.eu/api?message=injection&status=active&size=200" \
+            -o data/umm-inj.json \
+            || echo '{"data":[]}' > data/umm-inj.json
+
+          jq -n \
+            --argjson wd  "$(cat data/umm-wd.json)" \
+            --argjson inj "$(cat data/umm-inj.json)" \
+            '{withdrawal: ($wd.data // []), injection: ($inj.data // []), updatedAt: (now | todate)}' \
+            > data/umm.json
+
+          rm -f data/umm-wd.json data/umm-inj.json
+
+          echo "withdrawal: $(jq '.withdrawal | length' data/umm.json)"
+          echo "injection:  $(jq '.injection  | length' data/umm.json)"
+
+      - name: Commit if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/umm.json
+          git diff --staged --quiet \
+            || git commit -m "chore: update UMM data [skip ci]" \
+            && git push
