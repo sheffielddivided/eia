@@ -145,6 +145,58 @@
             color: var(--muted);
         }
         footer a { color: var(--muted); }
+
+        /* ── UMM table ─────────────────────────────────────────────────────── */
+        .umm-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: .8rem;
+            margin-top: .75rem;
+        }
+        .umm-table th {
+            text-align: left;
+            padding: .4rem .65rem;
+            color: var(--muted);
+            font-size: .7rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            border-bottom: 1px solid var(--border);
+        }
+        .umm-table td {
+            padding: .55rem .65rem;
+            border-bottom: 1px solid rgba(48,54,61,.55);
+            vertical-align: middle;
+            color: var(--text);
+            line-height: 1.35;
+        }
+        .umm-table tbody tr:last-child td { border-bottom: none; }
+        .umm-table tbody tr:hover td { background: rgba(255,255,255,.02); }
+        .umm-badge {
+            display: inline-block;
+            padding: .18rem .5rem;
+            border-radius: 4px;
+            font-size: .68rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+            white-space: nowrap;
+        }
+        .badge-withdrawal { background: rgba(45,212,191,.12); color: #2dd4bf; border: 1px solid rgba(45,212,191,.3); }
+        .badge-injection  { background: rgba(249,115,22,.12);  color: #f97316; border: 1px solid rgba(249,115,22,.3); }
+        .badge-unplanned  { background: rgba(248,81,73,.12);   color: #f85149; border: 1px solid rgba(248,81,73,.3); }
+        .badge-planned    { background: rgba(139,148,158,.1);  color: var(--muted); border: 1px solid var(--border); }
+        .umm-muted { color: var(--muted); }
+        .umm-empty {
+            text-align: center;
+            padding: 2.5rem 1rem;
+            color: var(--muted);
+            font-size: .85rem;
+        }
+        .umm-cap { font-variant-numeric: tabular-nums; white-space: nowrap; }
+        @media (max-width: 640px) {
+            .umm-table .col-cap, .umm-table .col-zone { display: none; }
+        }
     </style>
 </head>
 <body>
@@ -200,8 +252,8 @@
 </div>
 
 <h2 class="section-heading">
-    Europeisk gasforsyning – rørledning og LNG
-    <span>14-dagers glidende snitt &middot; GWh/dag &middot; EU total &middot; Stiplet = 5-årssnitt</span>
+    Gaslagerflyt og LNG-import – EU total
+    <span>Lagerinjeksjon, lagertrekk og LNG &middot; 14-dagers glidende snitt &middot; GWh/dag &middot; Stiplet = 5-årssnitt</span>
 </h2>
 
 <div class="card">
@@ -216,10 +268,25 @@
     <div class="stats-grid" id="supplyStatsGrid"></div>
 </div>
 
+<h2 class="section-heading">
+    Aktive kapasitetsvarsler (UMM)
+    <span>Driftsavbrudd og kapasitetsreduksjoner &middot; kilde: IIP+ (GIE)</span>
+</h2>
+
+<div class="card">
+    <div id="ummLoading" style="padding:1.5rem 0;display:flex;align-items:center;justify-content:center;gap:.6rem;color:var(--muted);font-size:.85rem">
+        <div class="spinner"></div>
+        Laster varsler&hellip;
+    </div>
+    <div class="error-box" id="ummErrorBox"></div>
+    <div class="stats-grid" id="ummStatsGrid"></div>
+    <div id="ummContent"></div>
+</div>
+
 <footer>
-    Kilde: <a href="https://agsi.gie.eu" target="_blank" rel="noopener">AGSI+</a> (gasslager),
-    <a href="https://alsi.gie.eu" target="_blank" rel="noopener">ALSI+</a> (LNG) og
-    <a href="https://iip.gie.eu" target="_blank" rel="noopener">IIP</a> (rørledning) / Gas Infrastructure Europe.
+    Kilde: <a href="https://agsi.gie.eu" target="_blank" rel="noopener">AGSI+</a> (gasslager, injeksjon og lagertrekk),
+    <a href="https://alsi.gie.eu" target="_blank" rel="noopener">ALSI+</a> (LNG-terminaler og import) og
+    <a href="https://iip.gie.eu" target="_blank" rel="noopener">IIP+</a> (kapasitetsvarsler) / Gas Infrastructure Europe.
     Oppdateres daglig med 1&ndash;2 dagers forsinkelse.
 </footer>
 
@@ -251,43 +318,49 @@ const SELECTIONS = {
     fr: { label: 'Frankrike',      country: 'FR' },
 };
 
-const cache = {};
+// Promise-based caches: concurrent callers share a single in-flight request
+const agsiRequestCache = {};  // "selKey-year" → Promise<records[]>
+const alsiRequestCache = {};  // "selKey-year" → Promise<records[]>
+
 let chartInstance = null;
 
-async function fetchYear(selKey, year) {
+function fetchAgsiRecords(selKey, year) {
     const id = `${selKey}-${year}`;
-    if (cache[id]) return cache[id];
-
-    const sel  = SELECTIONS[selKey];
-    const from = `${year}-01-01`;
-    const to   = year === CUR_YEAR
-        ? new Date().toISOString().slice(0,10)
-        : `${year}-12-31`;
-
-    const params = new URLSearchParams({ from, to, size: '400' });
-    if (sel.country) params.set('country', sel.country);
-    if (sel.type)    params.set('type', sel.type);
-    const url = `${BASE_URL}?${params}`;
-
-    const resp = await fetch(url, { headers: { 'x-key': API_KEY } });
-    if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status} fra AGSI API (${selKey}/${year})`);
+    if (!agsiRequestCache[id]) {
+        const sel  = SELECTIONS[selKey];
+        const from = `${year}-01-01`;
+        const to   = year === CUR_YEAR ? new Date().toISOString().slice(0,10) : `${year}-12-31`;
+        const params = new URLSearchParams({ from, to, size: '400' });
+        if (sel.country) params.set('country', sel.country);
+        if (sel.type)    params.set('type', sel.type);
+        const url = `${BASE_URL}?${params}`;
+        agsiRequestCache[id] = fetch(url, { headers: { 'x-key': API_KEY } })
+            .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status} fra AGSI API (${selKey}/${year})`); return r.json(); })
+            .then(j => {
+                const recs = Array.isArray(j.data) ? j.data : [];
+                if (recs[0]) {
+                    console.log(`[AGSI] ${selKey}/${year}: ${recs.length} records, url=${url}`);
+                    console.log(`[AGSI] ${selKey}/${year} first record keys:`, Object.keys(recs[0]));
+                    console.log(`[AGSI] ${selKey}/${year} first record:`, recs[0]);
+                } else {
+                    console.warn(`[AGSI] ${selKey}/${year}: 0 records, url=${url}`);
+                }
+                return recs;
+            });
     }
+    return agsiRequestCache[id];
+}
 
-    const json = await resp.json();
-    const records = Array.isArray(json.data) ? json.data : [];
-    console.log(`[AGSI] ${selKey}/${year}: ${records.length} records, url=${url}`, records[0] ?? '(tom)');
-
+async function fetchYear(selKey, year) {
+    const records = await fetchAgsiRecords(selKey, year);
     const map = {};
     for (const r of records) {
         const dateStr = r.gasDayStart || r.gas_day || r.date || '';
         if (!dateStr) continue;
-        const mmdd = dateStr.slice(5, 10); // "YYYY-MM-DD" → "MM-DD"
+        const mmdd = dateStr.slice(5, 10);
         const val  = parseFloat(r.full);
         if (!isNaN(val)) map[mmdd] = val;
     }
-
-    cache[id] = map;
     return map;
 }
 
@@ -522,7 +595,6 @@ const LNG_SELECTIONS = {
     nl: { label: 'Nederland',      country: 'NL' },
 };
 
-const lngCache = {};
 let lngChartInstance = null;
 
 function rollingAvg(arr, window = 14) {
@@ -536,37 +608,44 @@ function rollingAvg(arr, window = 14) {
     });
 }
 
+function fetchAlsiRecords(selKey, year) {
+    const id = `${selKey}-${year}`;
+    if (!alsiRequestCache[id]) {
+        const sel  = LNG_SELECTIONS[selKey];
+        const from = `${year}-01-01`;
+        const to   = year === CUR_YEAR ? new Date().toISOString().slice(0,10) : `${year}-12-31`;
+        const params = new URLSearchParams({ from, to, size: '400' });
+        if (sel.country) params.set('country', sel.country);
+        if (sel.type)    params.set('type', sel.type);
+        const url = `${ALSI_URL}?${params}`;
+        alsiRequestCache[id] = fetch(url, { headers: { 'x-key': API_KEY } })
+            .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status} fra ALSI API (${selKey}/${year})`); return r.json(); })
+            .then(j => {
+                const recs = Array.isArray(j.data) ? j.data : [];
+                if (recs[0]) {
+                    console.log(`[ALSI] ${selKey}/${year}: ${recs.length} records`);
+                    console.log(`[ALSI] ${selKey}/${year} first record keys:`, Object.keys(recs[0]));
+                    console.log(`[ALSI] ${selKey}/${year} first record:`, recs[0]);
+                } else {
+                    console.warn(`[ALSI] ${selKey}/${year}: 0 records`);
+                }
+                return recs;
+            });
+    }
+    return alsiRequestCache[id];
+}
+
 async function fetchAlsiYear(selKey, year) {
-    const id = `lng-${selKey}-${year}`;
-    if (lngCache[id]) return lngCache[id];
-
-    const sel  = LNG_SELECTIONS[selKey];
-    const from = `${year}-01-01`;
-    const to   = year === CUR_YEAR ? new Date().toISOString().slice(0,10) : `${year}-12-31`;
-
-    const params = new URLSearchParams({ from, to, size: '400' });
-    if (sel.country) params.set('country', sel.country);
-    if (sel.type)    params.set('type', sel.type);
-    const url = `${ALSI_URL}?${params}`;
-
-    const resp = await fetch(url, { headers: { 'x-key': API_KEY } });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status} fra ALSI API (${selKey}/${year})`);
-
-    const json = await resp.json();
-    const records = Array.isArray(json.data) ? json.data : [];
-    console.log(`[ALSI] ${selKey}/${year}: ${records.length} records`, records[0] ?? '(tom)');
-
+    const records = await fetchAlsiRecords(selKey, year);
     const map = {};
     for (const r of records) {
         const dateStr = r.gasDayStart || r.gas_day || r.date || '';
         if (!dateStr) continue;
         const mmdd = dateStr.slice(5, 10);
-        // withdrawal = LNG send-out/regasification into gas network
-        const val = parseFloat(r.withdrawal ?? r.sendOut ?? r.send ?? NaN);
+        // Try multiple field names: sendOut (primary), dtrs (declared total regasification sendout), dtrsActual
+        const val = parseFloat(r.sendOut ?? r.dtrs ?? r.dtrsActual ?? r.send ?? NaN);
         if (!isNaN(val)) map[mmdd] = val;
     }
-
-    lngCache[id] = map;
     return map;
 }
 
@@ -789,42 +868,27 @@ document.getElementById('lng-controls').addEventListener('click', e => {
     loadAndRenderLng(btn.dataset.key);
 });
 
-// ── Supply mix: IIP (pipeline) + ALSI (LNG) for EU ─────────────────────────
+// ── Supply: Storage withdrawal (AGSI) + LNG send-out (ALSI) for EU ──────────
+// Note: GIE's IIP API contains only infrastructure unavailability messages,
+// not physical pipeline flow data, so pipeline imports are not available here.
+// fetchAgsiFlowYear reuses agsiRequestCache set by fetchYear — no extra API calls.
 
-const IIP_URL  = 'https://iip.gie.eu/api';
-const iipCache = {};
 let supplyChartInstance = null;
 
-async function fetchIipYear(year) {
-    const id = `iip-${year}`;
-    if (iipCache[id]) return iipCache[id];
-
-    const from = `${year}-01-01`;
-    const to   = year === CUR_YEAR ? new Date().toISOString().slice(0,10) : `${year}-12-31`;
-    const params = new URLSearchParams({ from, to, size: '400', type: 'eu' });
-    const url = `${IIP_URL}?${params}`;
-
-    const resp = await fetch(url, { headers: { 'x-key': API_KEY } });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status} fra IIP API (${year})`);
-
-    const json = await resp.json();
-    const records = Array.isArray(json.data) ? json.data : [];
-    console.log(`[IIP] eu/${year}: ${records.length} records`, records[0] ?? '(tom)');
-
-    const map = {};
+async function fetchAgsiFlowYear(year) {
+    // Shares the same in-flight/cached AGSI EU request as the main storage chart
+    const records = await fetchAgsiRecords('eu', year);
+    const wd = {}, inj = {};
     for (const r of records) {
         const dateStr = r.gasDayStart || r.gas_day || r.date || '';
         if (!dateStr) continue;
         const mmdd = dateStr.slice(5, 10);
-        // Try common field names for physical pipeline flow
-        const val = parseFloat(
-            r.physicalFlow ?? r.physical ?? r.flow ?? r.import ?? r.value ?? NaN
-        );
-        if (!isNaN(val)) map[mmdd] = val;
+        const w = parseFloat(r.withdrawal ?? NaN);
+        const j = parseFloat(r.injection  ?? NaN);
+        if (!isNaN(w)) wd[mmdd]  = w;
+        if (!isNaN(j)) inj[mmdd] = j;
     }
-
-    iipCache[id] = map;
-    return map;
+    return { wd, inj };
 }
 
 async function loadAndRenderSupply() {
@@ -837,50 +901,40 @@ async function loadAndRenderSupply() {
     statsEl.innerHTML = '';
 
     try {
-        // Fetch IIP (pipeline) — LNG reuses lngCache from the chart above
-        const [iipCur, ...iipHist] = await Promise.all([
-            fetchIipYear(CUR_YEAR),
-            ...HIST_YEARS.map(y => fetchIipYear(y)),
+        const [flowCur, ...flowHist] = await Promise.all([
+            fetchAgsiFlowYear(CUR_YEAR),
+            ...HIST_YEARS.map(y => fetchAgsiFlowYear(y)),
         ]);
         const [lngCur, ...lngHist] = await Promise.all([
             fetchAlsiYear('eu', CUR_YEAR),
             ...HIST_YEARS.map(y => fetchAlsiYear('eu', y)),
         ]);
 
-        // Raw aligned arrays
-        const iipCurRaw  = DAY_KEYS.map(k => iipCur[k]  ?? null);
-        const lngCurRaw  = DAY_KEYS.map(k => lngCur[k]  ?? null);
-        const iipHistRaw = iipHist.map(m => DAY_KEYS.map(k => m[k] ?? null));
-        const lngHistRaw = lngHist.map(m => DAY_KEYS.map(k => m[k] ?? null));
+        const wdCurRaw   = DAY_KEYS.map(k => flowCur.wd[k]  ?? null);
+        const injCurRaw  = DAY_KEYS.map(k => flowCur.inj[k] ?? null);
+        const lngCurRaw  = DAY_KEYS.map(k => lngCur[k]      ?? null);
+        const wdHistRaw  = flowHist.map(f => DAY_KEYS.map(k => f.wd[k]  ?? null));
+        const injHistRaw = flowHist.map(f => DAY_KEYS.map(k => f.inj[k] ?? null));
+        const lngHistRaw = lngHist.map(m  => DAY_KEYS.map(k => m[k]     ?? null));
 
-        // 14-day rolling avg for current year
-        const iipSmooth = rollingAvg(iipCurRaw);
+        const wdSmooth  = rollingAvg(wdCurRaw);
+        const injSmooth = rollingAvg(injCurRaw);
         const lngSmooth = rollingAvg(lngCurRaw);
 
-        // 5-year daily average (mean, not min/max) for each metric
-        const iipAvg = DAY_KEYS.map((_, i) => {
-            const vals = iipHistRaw.map(arr => arr[i]).filter(v => v != null);
+        const avg = (histRaw) => DAY_KEYS.map((_, i) => {
+            const vals = histRaw.map(arr => arr[i]).filter(v => v != null);
             return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
         });
-        const lngAvg = DAY_KEYS.map((_, i) => {
-            const vals = lngHistRaw.map(arr => arr[i]).filter(v => v != null);
-            return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
-        });
-        const iipAvgSmooth = rollingAvg(iipAvg);
-        const lngAvgSmooth = rollingAvg(lngAvg);
+        const wdAvgSmooth  = rollingAvg(avg(wdHistRaw));
+        const injAvgSmooth = rollingAvg(avg(injHistRaw));
+        const lngAvgSmooth = rollingAvg(avg(lngHistRaw));
 
         const now      = new Date();
         const todayKey = String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
         const todayIdx = DAY_KEYS.indexOf(todayKey);
 
-        const iipEmpty = iipSmooth.every(v => v == null);
-        if (iipEmpty) {
-            errorEl.textContent = 'IIP-APIet returnerte ingen rørledningsdata for type=eu. Se konsoll for API-respons.';
-            errorEl.style.display = 'block';
-        }
-
-        renderSupplyChart(iipSmooth, lngSmooth, iipAvgSmooth, lngAvgSmooth, todayIdx);
-        renderSupplyStats(iipSmooth, lngSmooth, iipAvgSmooth, lngAvgSmooth);
+        renderSupplyChart(wdSmooth, injSmooth, lngSmooth, wdAvgSmooth, injAvgSmooth, lngAvgSmooth, todayIdx);
+        renderSupplyStats(wdSmooth, injSmooth, lngSmooth, wdAvgSmooth, injAvgSmooth, lngAvgSmooth);
     } catch (err) {
         errorEl.textContent = `Feil: ${err.message}`;
         errorEl.style.display = 'block';
@@ -890,7 +944,7 @@ async function loadAndRenderSupply() {
     }
 }
 
-function renderSupplyChart(iipCur, lngCur, iipAvg, lngAvg, todayIdx) {
+function renderSupplyChart(wdCur, injCur, lngCur, wdAvg, injAvg, lngAvg, todayIdx) {
     const ctx = document.getElementById('supplyChart').getContext('2d');
     if (supplyChartInstance) supplyChartInstance.destroy();
 
@@ -904,38 +958,59 @@ function renderSupplyChart(iipCur, lngCur, iipAvg, lngAvg, todayIdx) {
         data: {
             labels: xLabels,
             datasets: [
-                // Stacked filled areas for current year
                 {
-                    label: `Rørledning ${CUR_YEAR}`,
-                    data: iipCur,
+                    label: `Lagertrekk ${CUR_YEAR}`,
+                    data: wdCur,
                     borderColor: '#2dd4bf',
-                    backgroundColor: 'rgba(45,212,191,0.35)',
+                    backgroundColor: 'rgba(45,212,191,0.18)',
                     pointRadius: 0,
                     borderWidth: 2,
                     fill: 'origin',
                     tension: 0.3,
                     spanGaps: false,
-                    stack: 'cur',
                     order: 2,
                 },
                 {
-                    label: `LNG ${CUR_YEAR}`,
+                    label: `Lagerinjeksjon ${CUR_YEAR}`,
+                    data: injCur,
+                    borderColor: '#f97316',
+                    backgroundColor: 'rgba(249,115,22,0.18)',
+                    pointRadius: 0,
+                    borderWidth: 2,
+                    fill: 'origin',
+                    tension: 0.3,
+                    spanGaps: false,
+                    order: 2,
+                },
+                {
+                    label: `LNG import ${CUR_YEAR}`,
                     data: lngCur,
                     borderColor: '#e6b317',
-                    backgroundColor: 'rgba(230,179,23,0.35)',
+                    backgroundColor: 'rgba(230,179,23,0.18)',
                     pointRadius: 0,
                     borderWidth: 2,
                     fill: 'origin',
                     tension: 0.3,
                     spanGaps: false,
-                    stack: 'cur',
                     order: 2,
                 },
-                // 5-year average lines (dashed, no fill)
                 {
-                    label: `Rørledning ${avgLabel}`,
-                    data: iipAvg,
+                    label: `Lagertrekk ${avgLabel}`,
+                    data: wdAvg,
                     borderColor: 'rgba(45,212,191,0.55)',
+                    backgroundColor: 'transparent',
+                    pointRadius: 0,
+                    borderWidth: 1.5,
+                    borderDash: [5, 4],
+                    fill: false,
+                    tension: 0.3,
+                    spanGaps: true,
+                    order: 3,
+                },
+                {
+                    label: `Injeksjon ${avgLabel}`,
+                    data: injAvg,
+                    borderColor: 'rgba(249,115,22,0.55)',
                     backgroundColor: 'transparent',
                     pointRadius: 0,
                     borderWidth: 1.5,
@@ -1014,7 +1089,6 @@ function renderSupplyChart(iipCur, lngCur, iipAvg, lngAvg, todayIdx) {
                 },
                 y: {
                     min: 0,
-                    stacked: false,
                     grid: { color: '#21262d' },
                     ticks: {
                         color: '#8b949e', font: { size: 11 },
@@ -1030,39 +1104,35 @@ function renderSupplyChart(iipCur, lngCur, iipAvg, lngAvg, todayIdx) {
     });
 }
 
-function renderSupplyStats(iipCur, lngCur, iipAvg, lngAvg) {
+function renderSupplyStats(wdCur, injCur, lngCur, wdAvg, injAvg, lngAvg) {
     let latestIdx = -1;
-    for (let i = iipCur.length - 1; i >= 0; i--) {
-        if (iipCur[i] != null || lngCur[i] != null) { latestIdx = i; break; }
+    for (let i = wdCur.length - 1; i >= 0; i--) {
+        if (wdCur[i] != null || injCur[i] != null || lngCur[i] != null) { latestIdx = i; break; }
     }
     if (latestIdx < 0) return;
 
-    const iipVal = iipCur[latestIdx], lngVal = lngCur[latestIdx];
-    const total  = (iipVal ?? 0) + (lngVal ?? 0);
-    const iipPct = total > 0 ? ((iipVal ?? 0) / total * 100).toFixed(0) : '—';
-    const lngPct = total > 0 ? ((lngVal ?? 0) / total * 100).toFixed(0) : '—';
+    const wdVal  = wdCur[latestIdx],  injVal  = injCur[latestIdx],  lngVal  = lngCur[latestIdx];
+    const wdAvgV = wdAvg[latestIdx],  injAvgV = injAvg[latestIdx],  lngAvgV = lngAvg[latestIdx];
     const dateStr = DAY_KEYS[latestIdx];
 
-    const iipAvgVal = iipAvg[latestIdx], lngAvgVal = lngAvg[latestIdx];
+    const fmt = (v, color) =>
+        `<div class="stat-value" style="color:${color}">${v != null ? Math.round(v) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>`;
 
     document.getElementById('supplyStatsGrid').innerHTML = `
         <div class="stat">
-            <div class="stat-label">Rørledning (${dateStr})</div>
-            <div class="stat-value" style="color:#2dd4bf">${iipVal != null ? Math.round(iipVal) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
-            <div class="stat-sub">${iipPct !== '—' ? iipPct+'% av vist total' : ''}</div>
+            <div class="stat-label">Lagertrekk (${dateStr})</div>
+            ${fmt(wdVal, '#2dd4bf')}
+            <div class="stat-sub">5-årssnitt: ${wdAvgV != null ? Math.round(wdAvgV) : '—'} GWh/d</div>
         </div>
         <div class="stat">
-            <div class="stat-label">LNG (${dateStr})</div>
-            <div class="stat-value" style="color:#e6b317">${lngVal != null ? Math.round(lngVal) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
-            <div class="stat-sub">${lngPct !== '—' ? lngPct+'% av vist total' : ''}</div>
+            <div class="stat-label">Lagerinjeksjon (${dateStr})</div>
+            ${fmt(injVal, '#f97316')}
+            <div class="stat-sub">5-årssnitt: ${injAvgV != null ? Math.round(injAvgV) : '—'} GWh/d</div>
         </div>
         <div class="stat">
-            <div class="stat-label">5-årssnitt rørledning</div>
-            <div class="stat-value">${iipAvgVal != null ? Math.round(iipAvgVal) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
-        </div>
-        <div class="stat">
-            <div class="stat-label">5-årssnitt LNG</div>
-            <div class="stat-value">${lngAvgVal != null ? Math.round(lngAvgVal) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
+            <div class="stat-label">LNG import (${dateStr})</div>
+            ${fmt(lngVal, '#e6b317')}
+            <div class="stat-sub">5-årssnitt: ${lngAvgV != null ? Math.round(lngAvgV) : '—'} GWh/d</div>
         </div>
     `;
 }
@@ -1070,6 +1140,163 @@ function renderSupplyStats(iipCur, lngCur, iipAvg, lngAvg) {
 loadAndRender('eu');
 loadAndRenderLng('eu');
 loadAndRenderSupply();
+
+// ── UMM alerts: active capacity curtailments from IIP+ ───────────────────────
+const IIP_URL = 'https://iip.gie.eu/api';
+
+async function fetchUmms(messageType) {
+    const params = new URLSearchParams({ message: messageType, status: 'active', size: '200' });
+    const url = `${IIP_URL}?${params}`;
+    // IIP is public regulatory data — no API key needed, and omitting the custom
+    // header avoids a CORS preflight, allowing simple GET to succeed from browsers.
+    const r = await fetch(url);
+    if (!r.ok) throw new Error(`HTTP ${r.status} fra IIP API (${messageType})`);
+    const j = await r.json();
+    const recs = Array.isArray(j.data) ? j.data : [];
+    if (recs[0]) {
+        console.log(`[IIP] ${messageType}: ${recs.length} records, keys:`, Object.keys(recs[0]));
+        console.log(`[IIP] ${messageType} first record:`, recs[0]);
+    } else {
+        console.log(`[IIP] ${messageType}: 0 records`);
+    }
+    return recs.map(rec => ({ ...rec, _msgType: messageType }));
+}
+
+async function loadAndRenderUmm() {
+    const loadingEl = document.getElementById('ummLoading');
+    const errorEl   = document.getElementById('ummErrorBox');
+
+    loadingEl.classList.remove('hidden');
+    errorEl.style.display = 'none';
+
+    try {
+        const [wdRecs, injRecs] = await Promise.all([
+            fetchUmms('withdrawal'),
+            fetchUmms('injection'),
+        ]);
+
+        // Deduplicate by messageId (an active UMM could appear under both types)
+        const seen = new Set();
+        const all = [];
+        for (const rec of [...wdRecs, ...injRecs]) {
+            const key = rec.messageId || rec.message_id || JSON.stringify(rec);
+            if (!seen.has(key)) { seen.add(key); all.push(rec); }
+        }
+
+        // Unplanned first, then by eventStart descending
+        all.sort((a, b) => {
+            const unplanned = r => /unplanned/i.test(r.messageType || r.message_type || '');
+            if (unplanned(a) !== unplanned(b)) return unplanned(a) ? -1 : 1;
+            const aStart = a.eventStart || a.event_start || '';
+            const bStart = b.eventStart || b.event_start || '';
+            return bStart.localeCompare(aStart);
+        });
+
+        renderUmmStats(wdRecs.length, injRecs.length, all);
+        renderUmmTable(all);
+    } catch (err) {
+        errorEl.textContent = `Feil ved henting av UMM-data: ${err.message}`;
+        errorEl.style.display = 'block';
+        console.error(err);
+    } finally {
+        loadingEl.classList.add('hidden');
+    }
+}
+
+function renderUmmStats(wdCount, injCount, all) {
+    let totalUnavail = 0, hasCapacity = false;
+    for (const u of all) {
+        const v = parseFloat(u.unavailableCapacity ?? u.unavailable_capacity ?? NaN);
+        if (!isNaN(v)) { totalUnavail += v; hasCapacity = true; }
+    }
+
+    document.getElementById('ummStatsGrid').innerHTML = `
+        <div class="stat">
+            <div class="stat-label">Lagertrekk-varsler</div>
+            <div class="stat-value" style="color:#2dd4bf">${wdCount}</div>
+            <div class="stat-sub">aktive UMM-er</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">Injeksjonsvarsler</div>
+            <div class="stat-value" style="color:#f97316">${injCount}</div>
+            <div class="stat-sub">aktive UMM-er</div>
+        </div>
+        ${hasCapacity ? `<div class="stat">
+            <div class="stat-label">Sum utilgjengelig kap.</div>
+            <div class="stat-value">${Math.round(totalUnavail)}</div>
+            <div class="stat-sub">GWh/d (alle varsler)</div>
+        </div>` : ''}
+    `;
+}
+
+function renderUmmTable(umms) {
+    const contentEl = document.getElementById('ummContent');
+    if (!umms.length) {
+        contentEl.innerHTML = `<div class="umm-empty">Ingen aktive kapasitetsvarsler funnet</div>`;
+        return;
+    }
+
+    const rows = umms.map(u => {
+        const msgCat   = (u._msgType || '').toLowerCase();
+        const msgType  = (u.messageType  || u.message_type  || '').toLowerCase();
+        const reporter = u.reportingEntityName || u.reporting_entity_name || u.name || '—';
+        const zone     = u.balancingZoneName   || u.balancing_zone_name   || u.country || '—';
+        const unavail  = u.unavailableCapacity ?? u.unavailable_capacity;
+        const avail    = u.availableCapacity   ?? u.available_capacity;
+        const normal   = u.normalCapacity      ?? u.normal_capacity;
+        const unit     = u.unit || 'GWh/d';
+        const start    = (u.eventStart || u.event_start || '').slice(0, 10);
+        const stop     = (u.eventStop  || u.event_stop  || '').slice(0, 10);
+        const remarks  = u.remarks || u.remark || '';
+
+        const dirBadge = msgCat === 'withdrawal'
+            ? `<span class="umm-badge badge-withdrawal">Lagertrekk</span>`
+            : `<span class="umm-badge badge-injection">Injeksjon</span>`;
+
+        const typeBadge = /unplanned/i.test(msgType)
+            ? `<span class="umm-badge badge-unplanned">Uplanlagt</span>`
+            : `<span class="umm-badge badge-planned">Planlagt</span>`;
+
+        let capStr = '—';
+        if (unavail != null && normal != null)
+            capStr = `<span class="umm-cap">${unavail}&thinsp;/&thinsp;${normal} <span class="umm-muted">${unit}</span></span>`;
+        else if (avail != null && normal != null)
+            capStr = `<span class="umm-cap">${avail}&thinsp;/&thinsp;${normal} <span class="umm-muted">${unit}</span></span>`;
+        else if (unavail != null)
+            capStr = `<span class="umm-cap">${unavail} <span class="umm-muted">${unit}</span></span>`;
+
+        const period = start
+            ? (stop && stop !== start ? `${start} – ${stop}` : start)
+            : '—';
+
+        return `<tr title="${remarks.replace(/"/g,'&quot;')}">
+            <td>${dirBadge}</td>
+            <td>${typeBadge}</td>
+            <td>${reporter}</td>
+            <td class="col-zone umm-muted">${zone}</td>
+            <td class="col-cap">${capStr}</td>
+            <td class="umm-muted" style="white-space:nowrap">${period}</td>
+        </tr>`;
+    }).join('');
+
+    contentEl.innerHTML = `
+        <table class="umm-table">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Hendelse</th>
+                    <th>Rapportør</th>
+                    <th class="col-zone">Balanseringssone</th>
+                    <th class="col-cap">Utilgj.&thinsp;/&thinsp;Normal kap.</th>
+                    <th>Periode</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
+}
+
+loadAndRenderUmm();
 </script>
 </body>
 </html>
