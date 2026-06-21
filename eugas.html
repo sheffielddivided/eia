@@ -145,6 +145,58 @@
             color: var(--muted);
         }
         footer a { color: var(--muted); }
+
+        /* ── UMM table ─────────────────────────────────────────────────────── */
+        .umm-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: .8rem;
+            margin-top: .75rem;
+        }
+        .umm-table th {
+            text-align: left;
+            padding: .4rem .65rem;
+            color: var(--muted);
+            font-size: .7rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            border-bottom: 1px solid var(--border);
+        }
+        .umm-table td {
+            padding: .55rem .65rem;
+            border-bottom: 1px solid rgba(48,54,61,.55);
+            vertical-align: middle;
+            color: var(--text);
+            line-height: 1.35;
+        }
+        .umm-table tbody tr:last-child td { border-bottom: none; }
+        .umm-table tbody tr:hover td { background: rgba(255,255,255,.02); }
+        .umm-badge {
+            display: inline-block;
+            padding: .18rem .5rem;
+            border-radius: 4px;
+            font-size: .68rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+            white-space: nowrap;
+        }
+        .badge-withdrawal { background: rgba(45,212,191,.12); color: #2dd4bf; border: 1px solid rgba(45,212,191,.3); }
+        .badge-injection  { background: rgba(249,115,22,.12);  color: #f97316; border: 1px solid rgba(249,115,22,.3); }
+        .badge-unplanned  { background: rgba(248,81,73,.12);   color: #f85149; border: 1px solid rgba(248,81,73,.3); }
+        .badge-planned    { background: rgba(139,148,158,.1);  color: var(--muted); border: 1px solid var(--border); }
+        .umm-muted { color: var(--muted); }
+        .umm-empty {
+            text-align: center;
+            padding: 2.5rem 1rem;
+            color: var(--muted);
+            font-size: .85rem;
+        }
+        .umm-cap { font-variant-numeric: tabular-nums; white-space: nowrap; }
+        @media (max-width: 640px) {
+            .umm-table .col-cap, .umm-table .col-zone { display: none; }
+        }
     </style>
 </head>
 <body>
@@ -216,9 +268,25 @@
     <div class="stats-grid" id="supplyStatsGrid"></div>
 </div>
 
+<h2 class="section-heading">
+    Aktive kapasitetsvarsler (UMM)
+    <span>Driftsavbrudd og kapasitetsreduksjoner &middot; kilde: IIP+ (GIE)</span>
+</h2>
+
+<div class="card">
+    <div id="ummLoading" style="padding:1.5rem 0;display:flex;align-items:center;justify-content:center;gap:.6rem;color:var(--muted);font-size:.85rem">
+        <div class="spinner"></div>
+        Laster varsler&hellip;
+    </div>
+    <div class="error-box" id="ummErrorBox"></div>
+    <div class="stats-grid" id="ummStatsGrid"></div>
+    <div id="ummContent"></div>
+</div>
+
 <footer>
-    Kilde: <a href="https://agsi.gie.eu" target="_blank" rel="noopener">AGSI+</a> (gasslager, injeksjon og lagertrekk) og
-    <a href="https://alsi.gie.eu" target="_blank" rel="noopener">ALSI+</a> (LNG-terminaler og import) / Gas Infrastructure Europe.
+    Kilde: <a href="https://agsi.gie.eu" target="_blank" rel="noopener">AGSI+</a> (gasslager, injeksjon og lagertrekk),
+    <a href="https://alsi.gie.eu" target="_blank" rel="noopener">ALSI+</a> (LNG-terminaler og import) og
+    <a href="https://iip.gie.eu" target="_blank" rel="noopener">IIP+</a> (kapasitetsvarsler) / Gas Infrastructure Europe.
     Oppdateres daglig med 1&ndash;2 dagers forsinkelse.
 </footer>
 
@@ -1072,6 +1140,161 @@ function renderSupplyStats(wdCur, injCur, lngCur, wdAvg, injAvg, lngAvg) {
 loadAndRender('eu');
 loadAndRenderLng('eu');
 loadAndRenderSupply();
+
+// ── UMM alerts: active capacity curtailments from IIP+ ───────────────────────
+const IIP_URL = 'https://iip.gie.eu/api';
+
+async function fetchUmms(messageType) {
+    const params = new URLSearchParams({ message: messageType, status: 'active', size: '200' });
+    const url = `${IIP_URL}?${params}`;
+    const r = await fetch(url, { headers: { 'x-key': API_KEY } });
+    if (!r.ok) throw new Error(`HTTP ${r.status} fra IIP API (${messageType})`);
+    const j = await r.json();
+    const recs = Array.isArray(j.data) ? j.data : [];
+    if (recs[0]) {
+        console.log(`[IIP] ${messageType}: ${recs.length} records, keys:`, Object.keys(recs[0]));
+        console.log(`[IIP] ${messageType} first record:`, recs[0]);
+    } else {
+        console.log(`[IIP] ${messageType}: 0 records`);
+    }
+    return recs.map(rec => ({ ...rec, _msgType: messageType }));
+}
+
+async function loadAndRenderUmm() {
+    const loadingEl = document.getElementById('ummLoading');
+    const errorEl   = document.getElementById('ummErrorBox');
+
+    loadingEl.classList.remove('hidden');
+    errorEl.style.display = 'none';
+
+    try {
+        const [wdRecs, injRecs] = await Promise.all([
+            fetchUmms('withdrawal'),
+            fetchUmms('injection'),
+        ]);
+
+        // Deduplicate by messageId (an active UMM could appear under both types)
+        const seen = new Set();
+        const all = [];
+        for (const rec of [...wdRecs, ...injRecs]) {
+            const key = rec.messageId || rec.message_id || JSON.stringify(rec);
+            if (!seen.has(key)) { seen.add(key); all.push(rec); }
+        }
+
+        // Unplanned first, then by eventStart descending
+        all.sort((a, b) => {
+            const unplanned = r => /unplanned/i.test(r.messageType || r.message_type || '');
+            if (unplanned(a) !== unplanned(b)) return unplanned(a) ? -1 : 1;
+            const aStart = a.eventStart || a.event_start || '';
+            const bStart = b.eventStart || b.event_start || '';
+            return bStart.localeCompare(aStart);
+        });
+
+        renderUmmStats(wdRecs.length, injRecs.length, all);
+        renderUmmTable(all);
+    } catch (err) {
+        errorEl.textContent = `Feil ved henting av UMM-data: ${err.message}`;
+        errorEl.style.display = 'block';
+        console.error(err);
+    } finally {
+        loadingEl.classList.add('hidden');
+    }
+}
+
+function renderUmmStats(wdCount, injCount, all) {
+    let totalUnavail = 0, hasCapacity = false;
+    for (const u of all) {
+        const v = parseFloat(u.unavailableCapacity ?? u.unavailable_capacity ?? NaN);
+        if (!isNaN(v)) { totalUnavail += v; hasCapacity = true; }
+    }
+
+    document.getElementById('ummStatsGrid').innerHTML = `
+        <div class="stat">
+            <div class="stat-label">Lagertrekk-varsler</div>
+            <div class="stat-value" style="color:#2dd4bf">${wdCount}</div>
+            <div class="stat-sub">aktive UMM-er</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">Injeksjonsvarsler</div>
+            <div class="stat-value" style="color:#f97316">${injCount}</div>
+            <div class="stat-sub">aktive UMM-er</div>
+        </div>
+        ${hasCapacity ? `<div class="stat">
+            <div class="stat-label">Sum utilgjengelig kap.</div>
+            <div class="stat-value">${Math.round(totalUnavail)}</div>
+            <div class="stat-sub">GWh/d (alle varsler)</div>
+        </div>` : ''}
+    `;
+}
+
+function renderUmmTable(umms) {
+    const contentEl = document.getElementById('ummContent');
+    if (!umms.length) {
+        contentEl.innerHTML = `<div class="umm-empty">Ingen aktive kapasitetsvarsler funnet</div>`;
+        return;
+    }
+
+    const rows = umms.map(u => {
+        const msgCat   = (u._msgType || '').toLowerCase();
+        const msgType  = (u.messageType  || u.message_type  || '').toLowerCase();
+        const reporter = u.reportingEntityName || u.reporting_entity_name || u.name || '—';
+        const zone     = u.balancingZoneName   || u.balancing_zone_name   || u.country || '—';
+        const unavail  = u.unavailableCapacity ?? u.unavailable_capacity;
+        const avail    = u.availableCapacity   ?? u.available_capacity;
+        const normal   = u.normalCapacity      ?? u.normal_capacity;
+        const unit     = u.unit || 'GWh/d';
+        const start    = (u.eventStart || u.event_start || '').slice(0, 10);
+        const stop     = (u.eventStop  || u.event_stop  || '').slice(0, 10);
+        const remarks  = u.remarks || u.remark || '';
+
+        const dirBadge = msgCat === 'withdrawal'
+            ? `<span class="umm-badge badge-withdrawal">Lagertrekk</span>`
+            : `<span class="umm-badge badge-injection">Injeksjon</span>`;
+
+        const typeBadge = /unplanned/i.test(msgType)
+            ? `<span class="umm-badge badge-unplanned">Uplanlagt</span>`
+            : `<span class="umm-badge badge-planned">Planlagt</span>`;
+
+        let capStr = '—';
+        if (unavail != null && normal != null)
+            capStr = `<span class="umm-cap">${unavail}&thinsp;/&thinsp;${normal} <span class="umm-muted">${unit}</span></span>`;
+        else if (avail != null && normal != null)
+            capStr = `<span class="umm-cap">${avail}&thinsp;/&thinsp;${normal} <span class="umm-muted">${unit}</span></span>`;
+        else if (unavail != null)
+            capStr = `<span class="umm-cap">${unavail} <span class="umm-muted">${unit}</span></span>`;
+
+        const period = start
+            ? (stop && stop !== start ? `${start} – ${stop}` : start)
+            : '—';
+
+        return `<tr title="${remarks.replace(/"/g,'&quot;')}">
+            <td>${dirBadge}</td>
+            <td>${typeBadge}</td>
+            <td>${reporter}</td>
+            <td class="col-zone umm-muted">${zone}</td>
+            <td class="col-cap">${capStr}</td>
+            <td class="umm-muted" style="white-space:nowrap">${period}</td>
+        </tr>`;
+    }).join('');
+
+    contentEl.innerHTML = `
+        <table class="umm-table">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Hendelse</th>
+                    <th>Rapportør</th>
+                    <th class="col-zone">Balanseringssone</th>
+                    <th class="col-cap">Utilgj.&thinsp;/&thinsp;Normal kap.</th>
+                    <th>Periode</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
+}
+
+loadAndRenderUmm();
 </script>
 </body>
 </html>
