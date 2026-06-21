@@ -1147,7 +1147,9 @@ const IIP_URL = 'https://iip.gie.eu/api';
 async function fetchUmms(messageType) {
     const params = new URLSearchParams({ message: messageType, status: 'active', size: '200' });
     const url = `${IIP_URL}?${params}`;
-    const r = await fetch(url, { headers: { 'x-key': API_KEY } });
+    // IIP is public regulatory data — no API key needed, and omitting the custom
+    // header avoids a CORS preflight, allowing simple GET to succeed from browsers.
+    const r = await fetch(url);
     if (!r.ok) throw new Error(`HTTP ${r.status} fra IIP API (${messageType})`);
     const j = await r.json();
     const recs = Array.isArray(j.data) ? j.data : [];
