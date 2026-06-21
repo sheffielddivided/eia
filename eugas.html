@@ -1142,26 +1142,9 @@ loadAndRenderLng('eu');
 loadAndRenderSupply();
 
 // ── UMM alerts: active capacity curtailments from IIP+ ───────────────────────
-const IIP_URL = 'https://iip.gie.eu/api';
-// IIP returns 200 OK but sends no CORS headers — it's server-to-server only.
-// Route through corsproxy.io which injects Access-Control-Allow-Origin: *.
-const CORS_PROXY = 'https://corsproxy.io/?url=';
-
-async function fetchUmms(messageType) {
-    const params = new URLSearchParams({ message: messageType, status: 'active', size: '200' });
-    const iipUrl = `${IIP_URL}?${params}`;
-    const r = await fetch(`${CORS_PROXY}${encodeURIComponent(iipUrl)}`);
-    if (!r.ok) throw new Error(`HTTP ${r.status} fra IIP API (${messageType})`);
-    const j = await r.json();
-    const recs = Array.isArray(j.data) ? j.data : [];
-    if (recs[0]) {
-        console.log(`[IIP] ${messageType}: ${recs.length} records, keys:`, Object.keys(recs[0]));
-        console.log(`[IIP] ${messageType} first record:`, recs[0]);
-    } else {
-        console.log(`[IIP] ${messageType}: 0 records`);
-    }
-    return recs.map(rec => ({ ...rec, _msgType: messageType }));
-}
+// IIP doesn't send CORS headers so it can't be called from a browser directly.
+// A GitHub Actions workflow (update-umm.yml) fetches server-side every hour
+// and writes data/umm.json into this repo. The page reads same-origin JSON.
 
 async function loadAndRenderUmm() {
     const loadingEl = document.getElementById('ummLoading');
@@ -1171,12 +1154,14 @@ async function loadAndRenderUmm() {
     errorEl.style.display = 'none';
 
     try {
-        const [wdRecs, injRecs] = await Promise.all([
-            fetchUmms('withdrawal'),
-            fetchUmms('injection'),
-        ]);
+        const r = await fetch('data/umm.json');
+        if (!r.ok) throw new Error(`HTTP ${r.status} fra data/umm.json`);
+        const j = await r.json();
 
-        // Deduplicate by messageId (an active UMM could appear under both types)
+        const wdRecs  = (j.withdrawal || []).map(rec => ({ ...rec, _msgType: 'withdrawal' }));
+        const injRecs = (j.injection  || []).map(rec => ({ ...rec, _msgType: 'injection'  }));
+
+        // Deduplicate by messageId (an active UMM could appear in both lists)
         const seen = new Set();
         const all = [];
         for (const rec of [...wdRecs, ...injRecs]) {
@@ -1193,7 +1178,7 @@ async function loadAndRenderUmm() {
             return bStart.localeCompare(aStart);
         });
 
-        renderUmmStats(wdRecs.length, injRecs.length, all);
+        renderUmmStats(wdRecs.length, injRecs.length, all, j.updatedAt);
         renderUmmTable(all);
     } catch (err) {
         errorEl.textContent = `Feil ved henting av UMM-data: ${err.message}`;
@@ -1204,12 +1189,16 @@ async function loadAndRenderUmm() {
     }
 }
 
-function renderUmmStats(wdCount, injCount, all) {
+function renderUmmStats(wdCount, injCount, all, updatedAt) {
     let totalUnavail = 0, hasCapacity = false;
     for (const u of all) {
         const v = parseFloat(u.unavailableCapacity ?? u.unavailable_capacity ?? NaN);
         if (!isNaN(v)) { totalUnavail += v; hasCapacity = true; }
     }
+
+    const updatedStr = updatedAt
+        ? new Date(updatedAt).toLocaleString('nb-NO', { dateStyle: 'short', timeStyle: 'short' })
+        : 'venter på første oppdatering';
 
     document.getElementById('ummStatsGrid').innerHTML = `
         <div class="stat">
@@ -1227,6 +1216,11 @@ function renderUmmStats(wdCount, injCount, all) {
             <div class="stat-value">${Math.round(totalUnavail)}</div>
             <div class="stat-sub">GWh/d (alle varsler)</div>
         </div>` : ''}
+        <div class="stat">
+            <div class="stat-label">Sist oppdatert</div>
+            <div class="stat-value" style="font-size:1rem">${updatedStr}</div>
+            <div class="stat-sub">oppdateres hver time</div>
+        </div>
     `;
 }
 
