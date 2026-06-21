@@ -1150,7 +1150,7 @@ async function loadAndRenderUmm() {
     const loadingEl = document.getElementById('ummLoading');
     const errorEl   = document.getElementById('ummErrorBox');
 
-    loadingEl.classList.remove('hidden');
+    loadingEl.style.display = 'flex';
     errorEl.style.display = 'none';
 
     try {
@@ -1185,7 +1185,7 @@ async function loadAndRenderUmm() {
         errorEl.style.display = 'block';
         console.error(err);
     } finally {
-        loadingEl.classList.add('hidden');
+        loadingEl.style.display = 'none';
     }
 }
 
