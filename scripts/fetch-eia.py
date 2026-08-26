@@ -146,38 +146,22 @@ write('data/eia/flows.json', {
 
 # ── Spot price series discovery (one-time diagnostic) ─────────────────────────
 print('=== Spot Price Series Discovery ===')
-try:
-    disc_url = f'{BASE}/petroleum/pri/spt/facet/series/?api_key={API_KEY}'
-    with urllib.request.urlopen(disc_url, timeout=30) as r:
-        disc = json.loads(r.read())
-    # Print raw structure to understand the response format
-    print(f'  Discovery response type: {type(disc).__name__}')
-    if isinstance(disc, dict):
-        print(f'  Top-level keys: {list(disc.keys())}')
-        resp = disc.get('response', disc)
-        if isinstance(resp, dict):
-            print(f'  Response keys: {list(resp.keys())}')
-        # Try various paths
-        all_series = (resp.get('facets', {}).get('series', [])
-                      if isinstance(resp, dict) else [])
-        if not all_series and isinstance(resp, dict):
-            all_series = resp.get('series', [])
-    elif isinstance(disc, list):
-        all_series = disc
-    else:
-        all_series = []
-    print(f'  Total series candidates: {len(all_series)}')
-    # Print first 5 items raw for format inspection
-    for s in all_series[:5]:
-        print(f'  SAMPLE: {s!r}')
-    for s in all_series:
-        sid = str(s.get('id', '') if isinstance(s, dict) else s)
-        name = (s.get('alias') or s.get('name') or '') if isinstance(s, dict) else ''
-        kws = ['gas', 'petrol', 'motor', 'rbob', 'y35ny', 'rgc']
-        if any(k in sid.lower() or k in name.lower() for k in kws):
-            print(f'  SERIES: {sid!r} => {name!r}')
-except Exception as e:
-    print(f'  Discovery failed: {e}')
+GAS_CANDIDATES = [
+    'EER_EPMRR_PF4_Y35NY_DPG',   # NY Harbor conventional regular gasoline
+    'EER_EPMRU_PF4_Y35NY_DPG',   # NY Harbor regular unleaded
+    'EER_EPM0RF_PF4_Y35NY_DPG',  # NY Harbor RBOB reformulated
+    'EER_EPM0F_PF4_RGC_DPG',     # Gulf Coast RBOB
+    'EER_EPMRR_PF4_RGC_DPG',     # Gulf Coast conventional regular
+]
+for sid in GAS_CANDIDATES:
+    try:
+        rows = fetch_all('petroleum/pri/spt', {
+            'frequency': 'weekly', 'start': '2024-01-01',
+            'facets[series][]': sid,
+        })
+        print(f'  {sid}: {len(rows)} rows')
+    except Exception as e:
+        print(f'  {sid}: ERROR {e}')
 
 # ── Prices ────────────────────────────────────────────────────────────────────
 print('=== Prices ===')
