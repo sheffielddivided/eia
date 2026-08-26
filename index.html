@@ -765,7 +765,7 @@ function renderRefiningChart(spreadArr, wtiVals, mode) {
   const lastDate   = dates.at(-1) ?? '';
   document.getElementById('footerRefine').textContent = `Last updated: ${lastDate} · Source: U.S. EIA`;
 
-  let datasets, title;
+  let datasets, title, tooltipCb;
   if (mode === 'spread') {
     title = '3-2-1 Crack Spread ($/bbl)';
     datasets = [{
@@ -777,27 +777,39 @@ function renderRefiningChart(spreadArr, wtiVals, mode) {
       pointRadius: dates.length > 150 ? 0 : 2, pointHoverRadius: 5,
       tension: 0.3,
     }];
+    tooltipCb = ctx => ctx.parsed.y == null ? null : ` ${ctx.dataset.label}: ${fmtN(ctx.parsed.y, 2)} $/bbl`;
   } else {
-    // vs. WTI: WTI as filled area (base), crack spread as bold line overlay
+    // vs. WTI: stacked area — WTI as base, crack spread on top
+    // Dataset 2 y-values = WTI + spread so it sits above WTI visually;
+    // fill:'-1' shades only the crack-spread band between the two lines.
     title = '3-2-1 Crack Spread vs. WTI Crude ($/bbl)';
+    const wtiPlusSpread = spreadVals.map((v, i) => v + wtiVals[i]);
     datasets = [
       {
         label: 'WTI Crude',
         data: wtiVals,
         borderColor: '#fb923c',
-        backgroundColor: 'rgba(251,146,60,0.2)',
-        fill: true, borderWidth: 2,
-        pointRadius: 0, tension: 0.3, order: 2,
+        backgroundColor: 'rgba(251,146,60,0.35)',
+        fill: 'origin', borderWidth: 1.5,
+        pointRadius: 0, tension: 0.3,
       },
       {
         label: '3-2-1 Crack Spread',
-        data: spreadVals,
+        data: wtiPlusSpread,
         borderColor: '#22c55e',
-        backgroundColor: 'rgba(34,197,94,0.15)',
-        fill: true, borderWidth: 2.5,
-        pointRadius: 0, tension: 0.3, order: 1,
+        backgroundColor: 'rgba(34,197,94,0.45)',
+        fill: '-1', borderWidth: 2,  // fill between this line and WTI line
+        pointRadius: 0, tension: 0.3,
       },
     ];
+    tooltipCb = ctx => {
+      if (ctx.parsed.y == null) return null;
+      if (ctx.datasetIndex === 1) {
+        // show the crack spread contribution, not the stacked total
+        return ` 3-2-1 Crack Spread: ${fmtN(spreadVals[ctx.dataIndex], 2)} $/bbl`;
+      }
+      return ` WTI Crude: ${fmtN(ctx.parsed.y, 2)} $/bbl`;
+    };
   }
 
   document.getElementById('refineChartTitle').textContent = title;
@@ -809,7 +821,7 @@ function renderRefiningChart(spreadArr, wtiVals, mode) {
       ...BASE_OPT,
       plugins: {
         legend: { ...LEGEND, display: mode === 'wti' },
-        tooltip: { callbacks: { label: ctx => ctx.parsed.y == null ? null : ` ${ctx.dataset.label}: ${fmtN(ctx.parsed.y, 2)} $/bbl` } },
+        tooltip: { callbacks: { label: tooltipCb } },
       },
       scales: { x: XSCALE, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmtN(v, 0) } } },
     },
