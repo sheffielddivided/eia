@@ -144,27 +144,13 @@ write('data/eia/flows.json', {
     'lng': lng_agg,
 })
 
-# ── Spot price series discovery (one-time diagnostic) ─────────────────────────
-# Fetch all series without filter for a short recent window, print unique IDs.
-print('=== Spot Price Series Discovery ===')
-try:
-    disc_rows = fetch_all('petroleum/pri/spt', {
-        'frequency': 'weekly', 'start': '2025-01-01',
-    })
-    unique_sids = sorted(set(r.get('series', '') for r in disc_rows))
-    print(f'  All series in petroleum/pri/spt ({len(unique_sids)} total):')
-    for sid in unique_sids:
-        print(f'  SERIES: {sid!r}')
-except Exception as e:
-    print(f'  Discovery failed: {e}')
-
 # ── Prices ────────────────────────────────────────────────────────────────────
 print('=== Prices ===')
 crude_rows = fetch_all('petroleum/pri/spt', {
     'frequency': 'weekly', 'start': years_ago(22),
     'facets[series][]': [
         'RWTC', 'RBRTE',
-        'EER_EPM0F_PF4_Y35NY_DPG',   # NY Harbor RBOB gasoline spot ($/gal)
+        'EER_EPMRU_PF4_Y35NY_DPG',   # NY Harbor Regular Unleaded gasoline spot ($/gal)
         'EER_EPD2F_PF4_Y35NY_DPG',   # NY Harbor No.2 heating oil spot ($/gal)
     ],
 })

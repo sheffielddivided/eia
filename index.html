@@ -698,7 +698,7 @@ async function loadRefining() {
       : null;
 
     // NY Harbor wholesale spot prices (same endpoint as WTI — no date-alignment issues)
-    const GAS_ID = 'EER_EPM0F_PF4_Y35NY_DPG';  // RBOB gasoline ($/gal)
+    const GAS_ID = 'EER_EPMRU_PF4_Y35NY_DPG';  // NY Harbor Regular Unleaded gasoline ($/gal)
     const DSL_ID = 'EER_EPD2F_PF4_Y35NY_DPG';  // No.2 heating oil / diesel ($/gal)
     let wtiArr = fromLocal('RWTC');
     let gasArr = fromLocal(GAS_ID);
