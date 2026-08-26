@@ -150,11 +150,29 @@ try:
     disc_url = f'{BASE}/petroleum/pri/spt/facet/series/?api_key={API_KEY}'
     with urllib.request.urlopen(disc_url, timeout=30) as r:
         disc = json.loads(r.read())
-    all_series = disc.get('response', {}).get('facets', {}).get('series', [])
-    print(f'  Total series in petroleum/pri/spt: {len(all_series)}')
+    # Print raw structure to understand the response format
+    print(f'  Discovery response type: {type(disc).__name__}')
+    if isinstance(disc, dict):
+        print(f'  Top-level keys: {list(disc.keys())}')
+        resp = disc.get('response', disc)
+        if isinstance(resp, dict):
+            print(f'  Response keys: {list(resp.keys())}')
+        # Try various paths
+        all_series = (resp.get('facets', {}).get('series', [])
+                      if isinstance(resp, dict) else [])
+        if not all_series and isinstance(resp, dict):
+            all_series = resp.get('series', [])
+    elif isinstance(disc, list):
+        all_series = disc
+    else:
+        all_series = []
+    print(f'  Total series candidates: {len(all_series)}')
+    # Print first 5 items raw for format inspection
+    for s in all_series[:5]:
+        print(f'  SAMPLE: {s!r}')
     for s in all_series:
-        sid = s.get('id', '')
-        name = s.get('alias') or s.get('name') or ''
+        sid = str(s.get('id', '') if isinstance(s, dict) else s)
+        name = (s.get('alias') or s.get('name') or '') if isinstance(s, dict) else ''
         kws = ['gas', 'petrol', 'motor', 'rbob', 'y35ny', 'rgc']
         if any(k in sid.lower() or k in name.lower() for k in kws):
             print(f'  SERIES: {sid!r} => {name!r}')
