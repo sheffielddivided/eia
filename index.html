@@ -294,6 +294,18 @@ const API_KEY = 'dmZglvmWG86ewOel1qYABoroVEnhGjUNTiHU4Rki';
 const _cache = new Map();
 const CACHE_TTL = 30 * 60 * 1000;
 
+// Local JSON files (generated nightly by GitHub Actions) — null means not available
+const _localCache = {};
+async function loadLocal(path) {
+  if (path in _localCache) return _localCache[path];
+  try {
+    const resp = await fetch(path);
+    if (!resp.ok) { _localCache[path] = null; return null; }
+    _localCache[path] = await resp.json();
+    return _localCache[path];
+  } catch { _localCache[path] = null; return null; }
+}
+
 async function apiFetch(url) {
   const hit = _cache.get(url);
   if (hit && Date.now() - hit.ts < CACHE_TTL) return hit.json;
@@ -394,23 +406,23 @@ const PRICE_GROUPS = {
     title: 'Crude Oil Spot Prices',
     unit: '$/bbl',
     series: [
-      { id: 'RWTC',  label: 'WTI',   endpoint: 'petroleum/pri/spt', color: '#fb923c', freq: 'weekly' },
-      { id: 'RBRTE', label: 'Brent', endpoint: 'petroleum/pri/spt', color: '#38bdf8', freq: 'weekly' },
+      { id: 'RWTC',  localKey: 'RWTC',  label: 'WTI',   endpoint: 'petroleum/pri/spt', color: '#fb923c', freq: 'weekly' },
+      { id: 'RBRTE', localKey: 'RBRTE', label: 'Brent', endpoint: 'petroleum/pri/spt', color: '#38bdf8', freq: 'weekly' },
     ],
   },
   fuel: {
     title: 'Retail Fuel Prices',
     unit: '$/gallon',
     series: [
-      { id: 'EMM_EPM0_PTE_NUS_DPG',  label: 'Regular Gasoline', endpoint: 'petroleum/pri/gnd', color: '#22c55e', freq: 'weekly' },
-      { id: 'EMD_EPD2D_PTE_NUS_DPG', label: 'Diesel',           endpoint: 'petroleum/pri/gnd', color: '#38bdf8', freq: 'weekly' },
+      { id: 'EMM_EPM0_PTE_NUS_DPG',  localKey: 'EMM_EPM0_PTE_NUS_DPG',  label: 'Regular Gasoline', endpoint: 'petroleum/pri/gnd', color: '#22c55e', freq: 'weekly' },
+      { id: 'EMD_EPD2D_PTE_NUS_DPG', localKey: 'EMD_EPD2D_PTE_NUS_DPG', label: 'Diesel',           endpoint: 'petroleum/pri/gnd', color: '#38bdf8', freq: 'weekly' },
     ],
   },
   natgas: {
     title: 'U.S. Natural Gas — Domestic Price',
     unit: '$/MMBtu',
     series: [
-      { label: 'U.S. Natural Gas (domestic)', endpoint: 'natural-gas/pri/fut', color: '#a78bfa', freq: 'weekly',
+      { localKey: 'RNGWHHD', label: 'U.S. Natural Gas (domestic)', endpoint: 'natural-gas/pri/fut', color: '#a78bfa', freq: 'weekly',
         facets: { 'facets[series][]': 'RNGWHHD', 'facets[process][]': 'PS0' } },
     ],
   },
@@ -418,7 +430,7 @@ const PRICE_GROUPS = {
     title: 'LNG Export Price',
     unit: '$/MMBtu',
     series: [
-      { label: 'LNG Export Price', endpoint: 'natural-gas/move/expc', color: '#f97316', freq: 'monthly',
+      { localKey: 'lng_price', label: 'LNG Export Price', endpoint: 'natural-gas/move/expc', color: '#f97316', freq: 'monthly',
         facets: { 'facets[process][]': 'PNG' }, sumByPeriod: true },
     ],
   },
@@ -517,17 +529,23 @@ async function loadData() {
   showLoading('inv', true);
   try {
     const { start, end } = dateRange((yearsBack + 2) * 52);
-    const url  = eiaUrl('petroleum/stoc/wstk', { frequency: 'weekly', 'facets[series][]': series, start, end });
-    const json = await apiFetch(url);
-    const raw  = json?.response?.data;
-    if (!raw?.length) throw new Error('No data returned from EIA.');
     // EIA returns WGRSTUS1 in million bbl; all other stock series in thousand bbl.
-    // Multiply WGRSTUS1 by 1000 to normalise to thousand bbl so /1000 in rendering is consistent.
+    // Multiply WGRSTUS1 by 10000 to normalise so /1000 in rendering is consistent.
     const scale = series === 'WGRSTUS1' ? 10000 : 1;
-    cachedData = raw
-      .map(d => ({ date: d.period, value: parseFloat(d.value) * scale }))
-      .filter(d => !isNaN(d.value))
-      .sort((a, b) => a.date.localeCompare(b.date));
+    const local = await loadLocal('data/eia/inventory.json');
+    let rawData;
+    if (local?.series?.[series]?.length) {
+      rawData = local.series[series].filter(d => d.date >= start);
+    } else {
+      const url  = eiaUrl('petroleum/stoc/wstk', { frequency: 'weekly', 'facets[series][]': series, start, end });
+      const json = await apiFetch(url);
+      const raw  = json?.response?.data;
+      if (!raw?.length) throw new Error('No data returned from EIA.');
+      rawData = raw.map(d => ({ date: d.period, value: parseFloat(d.value) }))
+                   .filter(d => !isNaN(d.value))
+                   .sort((a, b) => a.date.localeCompare(b.date));
+    }
+    cachedData = rawData.map(d => ({ date: d.date, value: d.value * scale }));
     renderAll();
     showLoading('inv', false);
   } catch (e) { showErr('inv', e.message); showLoading('inv', false); }
@@ -648,7 +666,16 @@ async function loadFlows() {
 
 async function fetchPetroleumFlows(product, weeks) {
   const { start, end } = dateRange(weeks);
-  const params = { frequency: 'weekly', start, end };
+  const local = await loadLocal('data/eia/flows.json');
+  if (local?.petroleum) {
+    const byId = {};
+    for (const s of product.series) {
+      const data = (local.petroleum[s.id] ?? []).filter(d => d.date >= start);
+      if (data.length) byId[s.id] = data;
+    }
+    if (Object.keys(byId).length) return byId;
+  }
+  // Fallback: EIA API
   const urlParams = new URLSearchParams({ api_key: API_KEY, 'data[0]': 'value', 'sort[0][column]': 'period', 'sort[0][direction]': 'desc', length: 5000, offset: 0, frequency: 'weekly', start, end });
   product.series.forEach(s => urlParams.append('facets[series][]', s.id));
   const url  = `https://api.eia.gov/v2/${product.endpoint}/data/?${urlParams}`;
@@ -667,10 +694,17 @@ async function fetchPetroleumFlows(product, weeks) {
 }
 
 async function fetchLng(weeks) {
-  const months  = Math.max(12, Math.round(weeks * 12 / 52));
-  const cutoff  = new Date(); cutoff.setMonth(cutoff.getMonth() - months);
+  const months    = Math.max(12, Math.round(weeks * 12 / 52));
+  const cutoff    = new Date(); cutoff.setMonth(cutoff.getMonth() - months);
   const cutoffStr = cutoff.toISOString().slice(0, 7); // YYYY-MM
 
+  const local = await loadLocal('data/eia/flows.json');
+  if (local?.lng?.length) {
+    const lng = local.lng.filter(d => d.date >= cutoffStr);
+    if (lng.length) return { LNG_EXPORTS: lng };
+  }
+
+  // Fallback: EIA API
   const urlParams = new URLSearchParams({
     api_key: API_KEY, 'data[0]': 'value', frequency: 'monthly',
     start: cutoffStr,
@@ -681,8 +715,6 @@ async function fetchLng(weeks) {
   const json = await apiFetch(url);
   const raw  = json?.response?.data;
   if (!raw?.length) throw new Error('No LNG data returned from EIA.');
-
-  // Aggregate rows by period (sum across all export terminals)
   const byPeriod = {};
   for (const row of raw) {
     if (row.period < cutoffStr) continue;
@@ -691,10 +723,9 @@ async function fetchLng(weeks) {
     byPeriod[row.period] = (byPeriod[row.period] ?? 0) + v;
   }
   if (!Object.keys(byPeriod).length) throw new Error('No LNG data in requested date range.');
-  const byId = {
+  return {
     LNG_EXPORTS: Object.entries(byPeriod).map(([date, value]) => ({ date, value })).sort((a, b) => a.date.localeCompare(b.date)),
   };
-  return byId;
 }
 
 function renderFlowsChart(byId, product) {
@@ -727,27 +758,36 @@ async function loadPrices() {
   const group    = PRICE_GROUPS[groupKey];
   hideErr('price'); showLoading('price', true);
   try {
+    const local    = await loadLocal('data/eia/prices.json');
     const { start, end } = dateRange(weeks);
     const startMon = start.slice(0, 7);
     const endMon   = end.slice(0, 7);
-    const results = await Promise.all(group.series.map(async s => {
-      const isMonthly   = s.freq === 'monthly';
+    const today    = new Date().toISOString().slice(0, 10);
+    const todayMon = today.slice(0, 7);
+    const results  = await Promise.all(group.series.map(async s => {
+      const isMonthly = s.freq === 'monthly';
+      const cutoff    = isMonthly ? startMon : start;
+      const ceiling   = isMonthly ? todayMon : today;
+      // Use local file if available
+      if (local?.[s.localKey]?.length) {
+        const data = local[s.localKey].filter(d => d.date >= cutoff && d.date <= ceiling);
+        return { series: s, data };
+      }
+      // Fallback: EIA API
       const facetParams = s.facets !== undefined ? s.facets : { 'facets[series][]': s.id };
       const url  = eiaUrl(s.endpoint, { frequency: s.freq, ...facetParams,
         start: isMonthly ? startMon : start, end: isMonthly ? endMon : end });
       const json = await apiFetch(url);
       let raw;
       if (s.sumByPeriod) {
-        const today = new Date().toISOString().slice(0, 7);
         const byPeriod = {};
         for (const d of (json?.response?.data ?? [])) {
           const v = parseFloat(d.value);
-          if (isNaN(v) || d.period > today) continue;
+          if (isNaN(v) || d.period > todayMon) continue;
           byPeriod[d.period] = (byPeriod[d.period] ?? 0) + v;
         }
         raw = Object.entries(byPeriod).map(([date, value]) => ({ date, value })).sort((a, b) => a.date.localeCompare(b.date));
       } else {
-        const today = new Date().toISOString().slice(0, 10);
         raw = (json?.response?.data ?? [])
           .filter(d => !s.id || !d.series || d.series === s.id)
           .map(d => ({ date: d.period, value: parseFloat(d.value) }))
