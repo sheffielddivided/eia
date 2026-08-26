@@ -317,13 +317,6 @@
 </footer>
 
 <script>
-const API_KEY = 'dmZglvmWG86ewOel1qYABoroVEnhGjUNTiHU4Rki';
-
-// ── Cache (in-memory, 30-min TTL) ─────────────────────────────────────────────
-
-const _cache = new Map();
-const CACHE_TTL = 30 * 60 * 1000;
-
 // Local JSON files (generated nightly by GitHub Actions) — null means not available
 const _localCache = {};
 async function loadLocal(path) {
@@ -336,32 +329,6 @@ async function loadLocal(path) {
   } catch { _localCache[path] = null; return null; }
 }
 
-async function apiFetch(url) {
-  const hit = _cache.get(url);
-  if (hit && Date.now() - hit.ts < CACHE_TTL) return hit.json;
-  const resp = await fetch(url);
-  if (!resp.ok) {
-    let detail = '';
-    try { const j = await resp.json(); detail = ': ' + (j?.error ?? j?.['error-message'] ?? JSON.stringify(j)); } catch {}
-    throw new Error(`HTTP ${resp.status}${detail}`);
-  }
-  const json = await resp.json();
-  _cache.set(url, { json, ts: Date.now() });
-  return json;
-}
-
-function eiaUrl(route, params) {
-  const p = new URLSearchParams({
-    api_key: API_KEY, 'data[0]': 'value',
-    'sort[0][column]': 'period', 'sort[0][direction]': 'desc',
-    length: 5000, offset: 0,
-  });
-  for (const [key, val] of Object.entries(params)) {
-    if (Array.isArray(val)) val.forEach(v => p.append(key, v));
-    else p.set(key, val);
-  }
-  return `https://api.eia.gov/v2/${route}/data/?${p}`;
-}
 
 function dateRange(weeks) {
   const toISO = d => d.toISOString().slice(0, 10);
@@ -567,18 +534,9 @@ async function loadData() {
     // Multiply WGRSTUS1 by 10000 to normalise so /1000 in rendering is consistent.
     const scale = series === 'WGRSTUS1' ? 10000 : 1;
     const local = await loadLocal('data/eia/inventory.json');
-    let rawData;
-    if (local?.series?.[series]?.length) {
-      rawData = local.series[series].filter(d => d.date >= start);
-    } else {
-      const url  = eiaUrl('petroleum/stoc/wstk', { frequency: 'weekly', 'facets[series][]': series, start, end });
-      const json = await apiFetch(url);
-      const raw  = json?.response?.data;
-      if (!raw?.length) throw new Error('No data returned from EIA.');
-      rawData = raw.map(d => ({ date: d.period, value: parseFloat(d.value) }))
-                   .filter(d => !isNaN(d.value))
-                   .sort((a, b) => a.date.localeCompare(b.date));
-    }
+    if (!local?.series?.[series]?.length)
+      throw new Error('Data ikke tilgjengelig — oppdateres nattlig av GitHub Actions.');
+    const rawData = local.series[series].filter(d => d.date >= start);
     cachedData = rawData.map(d => ({ date: d.date, value: d.value * scale }));
     renderAll();
     showLoading('inv', false);
@@ -704,23 +662,8 @@ async function loadRefining() {
     let gasArr = fromLocal(GAS_ID);
     let dslArr = fromLocal(DSL_ID);
 
-    // Fallback: all three from petroleum/pri/spt in one call
-    if (!wtiArr || !gasArr || !dslArr) {
-      const url = eiaUrl('petroleum/pri/spt', { frequency: 'weekly',
-        'facets[series][]': ['RWTC', GAS_ID, DSL_ID], start, end });
-      const json = await apiFetch(url);
-      const raw  = (json?.response?.data ?? []).filter(d => d.date <= today);
-      const toArr = id => raw.filter(d => d.series === id)
-        .map(d => ({ date: d.period, value: parseFloat(d.value) }))
-        .filter(d => !isNaN(d.value))
-        .sort((a, b) => a.date.localeCompare(b.date));
-      if (!wtiArr) wtiArr = toArr('RWTC');
-      if (!gasArr) gasArr = toArr(GAS_ID);
-      if (!dslArr) dslArr = toArr(DSL_ID);
-    }
-
     if (!wtiArr?.length || !gasArr?.length || !dslArr?.length)
-      throw new Error('Insufficient price data for crack spread calculation.');
+      throw new Error('Data ikke tilgjengelig — oppdateres nattlig av GitHub Actions.');
 
     // EIA uses different day-of-week conventions per endpoint (e.g. WTI = Friday,
     // retail prices = Monday). Normalise to Monday-of-week before joining.
@@ -855,22 +798,7 @@ async function fetchPetroleumFlows(product, weeks) {
     }
     if (Object.keys(byId).length) return byId;
   }
-  // Fallback: EIA API
-  const urlParams = new URLSearchParams({ api_key: API_KEY, 'data[0]': 'value', 'sort[0][column]': 'period', 'sort[0][direction]': 'desc', length: 5000, offset: 0, frequency: 'weekly', start, end });
-  product.series.forEach(s => urlParams.append('facets[series][]', s.id));
-  const url  = `https://api.eia.gov/v2/${product.endpoint}/data/?${urlParams}`;
-  const json = await apiFetch(url);
-  const raw  = json?.response?.data;
-  if (!raw?.length) throw new Error('No flow data returned from EIA.');
-  const byId = {};
-  for (const row of raw) {
-    const v = parseFloat(row.value);
-    if (isNaN(v)) continue;
-    if (!byId[row.series]) byId[row.series] = [];
-    byId[row.series].push({ date: row.period, value: v });
-  }
-  for (const id of Object.keys(byId)) byId[id].sort((a, b) => a.date.localeCompare(b.date));
-  return byId;
+  throw new Error('Data ikke tilgjengelig — oppdateres nattlig av GitHub Actions.');
 }
 
 async function fetchLng(weeks) {
@@ -883,29 +811,7 @@ async function fetchLng(weeks) {
     const lng = local.lng.filter(d => d.date >= cutoffStr);
     if (lng.length) return { LNG_EXPORTS: lng };
   }
-
-  // Fallback: EIA API
-  const urlParams = new URLSearchParams({
-    api_key: API_KEY, 'data[0]': 'value', frequency: 'monthly',
-    start: cutoffStr,
-    'sort[0][column]': 'period', 'sort[0][direction]': 'desc', length: 5000, offset: 0,
-    'facets[process][]': 'ENG',
-  });
-  const url  = `https://api.eia.gov/v2/natural-gas/move/expc/data/?${urlParams}`;
-  const json = await apiFetch(url);
-  const raw  = json?.response?.data;
-  if (!raw?.length) throw new Error('No LNG data returned from EIA.');
-  const byPeriod = {};
-  for (const row of raw) {
-    if (row.period < cutoffStr) continue;
-    const v = parseFloat(row.value);
-    if (isNaN(v)) continue;
-    byPeriod[row.period] = (byPeriod[row.period] ?? 0) + v;
-  }
-  if (!Object.keys(byPeriod).length) throw new Error('No LNG data in requested date range.');
-  return {
-    LNG_EXPORTS: Object.entries(byPeriod).map(([date, value]) => ({ date, value })).sort((a, b) => a.date.localeCompare(b.date)),
-  };
+  throw new Error('Data ikke tilgjengelig — oppdateres nattlig av GitHub Actions.');
 }
 
 function renderFlowsChart(byId, product) {
@@ -948,33 +854,10 @@ async function loadPrices() {
       const isMonthly = s.freq === 'monthly';
       const cutoff    = isMonthly ? startMon : start;
       const ceiling   = isMonthly ? todayMon : today;
-      // Use local file if available
-      if (local?.[s.localKey]?.length) {
-        const data = local[s.localKey].filter(d => d.date >= cutoff && d.date <= ceiling);
-        return { series: s, data };
-      }
-      // Fallback: EIA API
-      const facetParams = s.facets !== undefined ? s.facets : { 'facets[series][]': s.id };
-      const url  = eiaUrl(s.endpoint, { frequency: s.freq, ...facetParams,
-        start: isMonthly ? startMon : start, end: isMonthly ? endMon : end });
-      const json = await apiFetch(url);
-      let raw;
-      if (s.sumByPeriod) {
-        const byPeriod = {};
-        for (const d of (json?.response?.data ?? [])) {
-          const v = parseFloat(d.value);
-          if (isNaN(v) || d.period > todayMon) continue;
-          byPeriod[d.period] = (byPeriod[d.period] ?? 0) + v;
-        }
-        raw = Object.entries(byPeriod).map(([date, value]) => ({ date, value })).sort((a, b) => a.date.localeCompare(b.date));
-      } else {
-        raw = (json?.response?.data ?? [])
-          .filter(d => !s.id || !d.series || d.series === s.id)
-          .map(d => ({ date: d.period, value: parseFloat(d.value) }))
-          .filter(d => !isNaN(d.value) && d.date <= today)
-          .sort((a, b) => a.date.localeCompare(b.date));
-      }
-      return { series: s, data: raw };
+      if (!local?.[s.localKey]?.length)
+        throw new Error('Data ikke tilgjengelig — oppdateres nattlig av GitHub Actions.');
+      const data = local[s.localKey].filter(d => d.date >= cutoff && d.date <= ceiling);
+      return { series: s, data };
     }));
     renderPricesChart(results, group);
     showLoading('price', false);
