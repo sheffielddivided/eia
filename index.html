@@ -162,6 +162,7 @@
 
 <nav class="view-nav">
   <button id="tabCrude"    class="active" onclick="setView('crude')">Crude</button>
+  <button id="tabRefining"               onclick="setView('refining')">Refining</button>
   <button id="tabProducts"               onclick="setView('products')">Products</button>
   <button id="tabFlows"                  onclick="setView('flows')">Flows</button>
   <button id="tabPrices"                 onclick="setView('prices')">Prices</button>
@@ -214,6 +215,35 @@
         <canvas id="deltaChart" style="display:none"></canvas>
       </div>
       <div class="footnote" id="footerDelta"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════ REFINING ══════════════════════════ -->
+  <div id="refiningView" style="display:none">
+    <div class="controls">
+      <div class="toggle-group" id="refiningModeGrp">
+        <button data-val="spread" class="active" onclick="activateBtn(this);loadRefining()">Crack Spread</button>
+        <button data-val="wti"                   onclick="activateBtn(this);loadRefining()">vs. WTI</button>
+      </div>
+
+      <div class="toggle-group" id="refiningPeriodGrp">
+        <button data-val="52"   onclick="activateBtn(this);loadRefining()">1y</button>
+        <button data-val="104"  class="active" onclick="activateBtn(this);loadRefining()">2y</button>
+        <button data-val="260"  onclick="activateBtn(this);loadRefining()">5y</button>
+        <button data-val="520"  onclick="activateBtn(this);loadRefining()">10y</button>
+        <button data-val="1040" onclick="activateBtn(this);loadRefining()">20y</button>
+      </div>
+    </div>
+
+    <div id="refineErrorBox" style="display:none"></div>
+
+    <div class="chart-card">
+      <h2 id="refineChartTitle">Loading…</h2>
+      <div class="chart-wrap">
+        <div class="status" id="refineLoadingMsg"><div class="spinner"></div><br>Fetching data from EIA…</div>
+        <canvas id="refineChart" style="display:none"></canvas>
+      </div>
+      <div class="footnote" id="footerRefine"></div>
     </div>
   </div>
 
@@ -440,6 +470,7 @@ const PRICE_GROUPS = {
 
 let mainChart   = null;
 let deltaChart  = null;
+let refineChart = null;
 let flowChart   = null;
 let priceChart  = null;
 let cachedData  = null;
@@ -477,16 +508,19 @@ function setView(view) {
   const isProducts = view === 'products';
   const isInv      = isCrude || isProducts;
   document.getElementById('tabCrude').classList.toggle('active', isCrude);
+  document.getElementById('tabRefining').classList.toggle('active', view === 'refining');
   document.getElementById('tabProducts').classList.toggle('active', isProducts);
   document.getElementById('tabFlows').classList.toggle('active', view === 'flows');
   document.getElementById('tabPrices').classList.toggle('active', view === 'prices');
-  document.getElementById('inventoryView').style.display = isInv        ? '' : 'none';
-  document.getElementById('flowsView').style.display     = view === 'flows'  ? '' : 'none';
-  document.getElementById('pricesView').style.display    = view === 'prices' ? '' : 'none';
+  document.getElementById('inventoryView').style.display  = isInv             ? '' : 'none';
+  document.getElementById('refiningView').style.display   = view === 'refining'? '' : 'none';
+  document.getElementById('flowsView').style.display      = view === 'flows'   ? '' : 'none';
+  document.getElementById('pricesView').style.display     = view === 'prices'  ? '' : 'none';
   document.getElementById('seriesGrpCrude').style.display    = isCrude    ? '' : 'none';
   document.getElementById('seriesGrpProducts').style.display = isProducts ? '' : 'none';
-  if (view === 'flows'  && !flowChart)  loadFlows();
-  if (view === 'prices' && !priceChart) loadPrices();
+  if (view === 'refining' && !refineChart) loadRefining();
+  if (view === 'flows'    && !flowChart)   loadFlows();
+  if (view === 'prices'   && !priceChart)  loadPrices();
   if (isInv) loadData();
 }
 
@@ -645,6 +679,128 @@ function renderDeltaChart(data) {
     type: 'bar',
     data: { labels, datasets: [{ data: deltas, backgroundColor: colors, borderWidth: 0 }] },
     options: { ...BASE_OPT, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${sign(ctx.parsed.y)}${fmt(ctx.parsed.y)} million bbl` } } }, scales: { x: { ...XSCALE, ticks: { ...XSCALE.ticks, maxTicksLimit: 14 }, grid: { display: false } }, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmtN(v, 0) } } } },
+  });
+}
+
+// ── Refining (3-2-1 crack spread) ─────────────────────────────────────────────
+
+async function loadRefining() {
+  const mode  = getActiveVal('refiningModeGrp');
+  const weeks = parseInt(getActiveVal('refiningPeriodGrp'), 10);
+  hideErr('refine'); showLoading('refine', true);
+  try {
+    const local   = await loadLocal('data/eia/prices.json');
+    const { start, end } = dateRange(weeks);
+    const today   = new Date().toISOString().slice(0, 10);
+
+    const fromLocal = key => local?.[key]?.length
+      ? local[key].filter(d => d.date >= start && d.date <= today)
+      : null;
+
+    let wtiArr = fromLocal('RWTC');
+    let gasArr = fromLocal('EMM_EPM0_PTE_NUS_DPG');
+    let dslArr = fromLocal('EMD_EPD2D_PTE_NUS_DPG');
+
+    // Fallback: fetch crude spot prices from EIA API
+    if (!wtiArr) {
+      const url  = eiaUrl('petroleum/pri/spt', { frequency: 'weekly', 'facets[series][]': 'RWTC', start, end });
+      const json = await apiFetch(url);
+      wtiArr = (json?.response?.data ?? [])
+        .map(d => ({ date: d.period, value: parseFloat(d.value) }))
+        .filter(d => !isNaN(d.value) && d.date <= today)
+        .sort((a, b) => a.date.localeCompare(b.date));
+    }
+    // Fallback: fetch retail fuel prices from EIA API
+    if (!gasArr || !dslArr) {
+      const url  = eiaUrl('petroleum/pri/gnd', { frequency: 'weekly', 'facets[series][]': ['EMM_EPM0_PTE_NUS_DPG', 'EMD_EPD2D_PTE_NUS_DPG'], start, end });
+      const json = await apiFetch(url);
+      const raw  = (json?.response?.data ?? []).filter(d => d.date <= today);
+      if (!gasArr) gasArr = raw.filter(d => d.series === 'EMM_EPM0_PTE_NUS_DPG').map(d => ({ date: d.period, value: parseFloat(d.value) })).filter(d => !isNaN(d.value)).sort((a, b) => a.date.localeCompare(b.date));
+      if (!dslArr) dslArr = raw.filter(d => d.series === 'EMD_EPD2D_PTE_NUS_DPG').map(d => ({ date: d.period, value: parseFloat(d.value) })).filter(d => !isNaN(d.value)).sort((a, b) => a.date.localeCompare(b.date));
+    }
+
+    if (!wtiArr?.length || !gasArr?.length || !dslArr?.length)
+      throw new Error('Insufficient price data for crack spread calculation.');
+
+    const wtiMap = Object.fromEntries(wtiArr.map(d => [d.date, d.value]));
+    const gasMap = Object.fromEntries(gasArr.map(d => [d.date, d.value]));
+    const dslMap = Object.fromEntries(dslArr.map(d => [d.date, d.value]));
+
+    // Align on dates where all three series have a value
+    const allDates = [...new Set([...Object.keys(wtiMap), ...Object.keys(gasMap), ...Object.keys(dslMap)])].sort();
+    const spreadArr = [], wtiAligned = [];
+    for (const date of allDates) {
+      const wti = wtiMap[date], gas = gasMap[date], dsl = dslMap[date];
+      if (wti == null || gas == null || dsl == null) continue;
+      // 3-2-1 crack spread: (2 × gas_$/bbl + 1 × dsl_$/bbl − 3 × WTI_$/bbl) / 3
+      // Retail prices are $/gallon; 1 barrel = 42 gallons
+      spreadArr.push({ date, value: (2 * gas * 42 + dsl * 42 - 3 * wti) / 3 });
+      wtiAligned.push(wti);
+    }
+
+    if (!spreadArr.length) throw new Error('No overlapping dates across WTI, gasoline, and diesel series.');
+
+    renderRefiningChart(spreadArr, wtiAligned, mode);
+    showLoading('refine', false);
+  } catch (e) { showErr('refine', e.message); showLoading('refine', false); }
+}
+
+function renderRefiningChart(spreadArr, wtiVals, mode) {
+  const canvas = document.getElementById('refineChart');
+  canvas.style.display = 'block';
+  const dates      = spreadArr.map(d => d.date);
+  const spreadVals = spreadArr.map(d => d.value);
+  const lastDate   = dates.at(-1) ?? '';
+  document.getElementById('footerRefine').textContent = `Last updated: ${lastDate} · Source: U.S. EIA`;
+
+  let datasets, title;
+  if (mode === 'spread') {
+    title = '3-2-1 Crack Spread ($/bbl)';
+    datasets = [{
+      label: '3-2-1 Crack Spread',
+      data: spreadVals,
+      borderColor: '#22c55e',
+      backgroundColor: 'rgba(34,197,94,0.12)',
+      fill: true, borderWidth: 2,
+      pointRadius: dates.length > 150 ? 0 : 2, pointHoverRadius: 5,
+      tension: 0.3,
+    }];
+  } else {
+    // vs. WTI: WTI as filled area (base), crack spread as bold line overlay
+    title = '3-2-1 Crack Spread vs. WTI Crude ($/bbl)';
+    datasets = [
+      {
+        label: 'WTI Crude',
+        data: wtiVals,
+        borderColor: '#fb923c',
+        backgroundColor: 'rgba(251,146,60,0.2)',
+        fill: true, borderWidth: 2,
+        pointRadius: 0, tension: 0.3, order: 2,
+      },
+      {
+        label: '3-2-1 Crack Spread',
+        data: spreadVals,
+        borderColor: '#22c55e',
+        backgroundColor: 'rgba(34,197,94,0.15)',
+        fill: true, borderWidth: 2.5,
+        pointRadius: 0, tension: 0.3, order: 1,
+      },
+    ];
+  }
+
+  document.getElementById('refineChartTitle').textContent = title;
+  if (refineChart) refineChart.destroy();
+  refineChart = new Chart(canvas, {
+    type: 'line',
+    data: { labels: dates, datasets },
+    options: {
+      ...BASE_OPT,
+      plugins: {
+        legend: { ...LEGEND, display: mode === 'wti' },
+        tooltip: { callbacks: { label: ctx => ctx.parsed.y == null ? null : ` ${ctx.dataset.label}: ${fmtN(ctx.parsed.y, 2)} $/bbl` } },
+      },
+      scales: { x: XSCALE, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmtN(v, 0) } } },
+    },
   });
 }
 
@@ -828,7 +984,7 @@ function renderPricesChart(results, group) {
 // ── Loading / error ───────────────────────────────────────────────────────────
 
 function showLoading(view, on) {
-  const ids = { inv: ['loadingMsg', 'mainChart', 'deltaChart'], flow: ['flowLoadingMsg', 'flowChart'], price: ['priceLoadingMsg', 'priceChart'] };
+  const ids = { inv: ['loadingMsg', 'mainChart', 'deltaChart'], refine: ['refineLoadingMsg', 'refineChart'], flow: ['flowLoadingMsg', 'flowChart'], price: ['priceLoadingMsg', 'priceChart'] };
   const [spinner, ...canvases] = ids[view];
   document.getElementById(spinner).style.display = on ? 'block' : 'none';
   if (on) canvases.forEach(id => { document.getElementById(id).style.display = 'none'; });
