@@ -722,23 +722,35 @@ async function loadRefining() {
     if (!wtiArr?.length || !gasArr?.length || !dslArr?.length)
       throw new Error('Insufficient price data for crack spread calculation.');
 
-    const wtiMap = Object.fromEntries(wtiArr.map(d => [d.date, d.value]));
-    const gasMap = Object.fromEntries(gasArr.map(d => [d.date, d.value]));
-    const dslMap = Object.fromEntries(dslArr.map(d => [d.date, d.value]));
+    // EIA uses different day-of-week conventions per endpoint (e.g. WTI = Friday,
+    // retail prices = Monday). Normalise to Monday-of-week before joining.
+    const monOfWeek = s => {
+      const d = new Date(s + 'T12:00:00Z');
+      d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+      return d.toISOString().slice(0, 10);
+    };
+    const byWeek = arr => {
+      const m = {};
+      for (const d of arr) m[monOfWeek(d.date)] = d;
+      return m;
+    };
+    const wtiByWk = byWeek(wtiArr);
+    const gasByWk = byWeek(gasArr);
+    const dslByWk = byWeek(dslArr);
 
-    // Align on dates where all three series have a value
-    const allDates = [...new Set([...Object.keys(wtiMap), ...Object.keys(gasMap), ...Object.keys(dslMap)])].sort();
+    // Align on weeks where all three series have a value
+    const weeks = [...new Set([...Object.keys(wtiByWk), ...Object.keys(gasByWk), ...Object.keys(dslByWk)])].sort();
     const spreadArr = [], wtiAligned = [];
-    for (const date of allDates) {
-      const wti = wtiMap[date], gas = gasMap[date], dsl = dslMap[date];
-      if (wti == null || gas == null || dsl == null) continue;
+    for (const wk of weeks) {
+      const wtiPt = wtiByWk[wk], gasPt = gasByWk[wk], dslPt = dslByWk[wk];
+      if (!wtiPt || !gasPt || !dslPt) continue;
       // 3-2-1 crack spread: (2 × gas_$/bbl + 1 × dsl_$/bbl − 3 × WTI_$/bbl) / 3
       // Retail prices are $/gallon; 1 barrel = 42 gallons
-      spreadArr.push({ date, value: (2 * gas * 42 + dsl * 42 - 3 * wti) / 3 });
-      wtiAligned.push(wti);
+      spreadArr.push({ date: wtiPt.date, value: (2 * gasPt.value * 42 + dslPt.value * 42 - 3 * wtiPt.value) / 3 });
+      wtiAligned.push(wtiPt.value);
     }
 
-    if (!spreadArr.length) throw new Error('No overlapping dates across WTI, gasoline, and diesel series.');
+    if (!spreadArr.length) throw new Error('No overlapping weeks across WTI, gasoline, and diesel series.');
 
     renderRefiningChart(spreadArr, wtiAligned, mode);
     showLoading('refine', false);
