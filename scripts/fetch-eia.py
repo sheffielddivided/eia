@@ -14,7 +14,9 @@ if not API_KEY:
 
 BASE = 'https://api.eia.gov/v2'
 
-def fetch_page(route, params, offset=0):
+import time
+
+def fetch_page(route, params, offset=0, attempt=0):
     parts = [
         ('api_key', API_KEY),
         ('data[0]', 'value'),
@@ -30,8 +32,16 @@ def fetch_page(route, params, offset=0):
         else:
             parts.append((k, v))
     url = f'{BASE}/{route}/data/?{urllib.parse.urlencode(parts)}'
-    with urllib.request.urlopen(url, timeout=60) as r:
-        return json.loads(r.read())
+    try:
+        with urllib.request.urlopen(url, timeout=120) as r:
+            return json.loads(r.read())
+    except Exception as e:
+        if attempt < 3:
+            wait = 2 ** (attempt + 1)
+            print(f'\n  Retry {attempt+1} for {route} (offset={offset}) after {wait}s: {e}')
+            time.sleep(wait)
+            return fetch_page(route, params, offset, attempt + 1)
+        raise
 
 def fetch_all(route, params):
     all_rows = []
@@ -87,19 +97,23 @@ write('data/eia/inventory.json', {
 })
 
 # ── Petroleum Flows ───────────────────────────────────────────────────────────
+# Fetch each product group separately (~4 series × 20yr × 52wk ≈ 4,000 rows each)
+# to avoid pagination timeouts on a single large request.
 print('=== Petroleum Flows ===')
-flow_series = [
-    'WCRFPUS2', 'WCRIMUS2', 'WCREXUS2', 'WCRRIUS2',
-    'WGFRPUS2', 'WGFIMUS2', 'WGFEXUS2', 'WGFUPUS2',
-    'WDIRPUS2', 'WDIIMUS2', 'WDIEXUS2', 'WDIUPUS2',
-    'WKJRPUS2', 'WKJIMUS2', 'WKJEXUS2', 'WKJUPUS2',
+flow_groups = [
+    ['WCRFPUS2', 'WCRIMUS2', 'WCREXUS2', 'WCRRIUS2'],   # crude
+    ['WGFRPUS2', 'WGFIMUS2', 'WGFEXUS2', 'WGFUPUS2'],   # gasoline
+    ['WDIRPUS2', 'WDIIMUS2', 'WDIEXUS2', 'WDIUPUS2'],   # distillate
+    ['WKJRPUS2', 'WKJIMUS2', 'WKJEXUS2', 'WKJUPUS2'],   # jet fuel
 ]
-pet_rows = fetch_all('petroleum/sum/sndw', {
-    'frequency': 'weekly',
-    'start': years_ago(22),
-    'facets[series][]': flow_series,
-})
-pet_map = to_series_map(pet_rows)
+pet_map = {}
+for group in flow_groups:
+    rows = fetch_all('petroleum/sum/sndw', {
+        'frequency': 'weekly',
+        'start': years_ago(20),
+        'facets[series][]': group,
+    })
+    pet_map.update(to_series_map(rows))
 
 # ── LNG Flows ─────────────────────────────────────────────────────────────────
 print('=== LNG Flows ===')
