@@ -145,23 +145,18 @@ write('data/eia/flows.json', {
 })
 
 # ── Spot price series discovery (one-time diagnostic) ─────────────────────────
+# Fetch all series without filter for a short recent window, print unique IDs.
 print('=== Spot Price Series Discovery ===')
-GAS_CANDIDATES = [
-    'EER_EPMRR_PF4_Y35NY_DPG',   # NY Harbor conventional regular gasoline
-    'EER_EPMRU_PF4_Y35NY_DPG',   # NY Harbor regular unleaded
-    'EER_EPM0RF_PF4_Y35NY_DPG',  # NY Harbor RBOB reformulated
-    'EER_EPM0F_PF4_RGC_DPG',     # Gulf Coast RBOB
-    'EER_EPMRR_PF4_RGC_DPG',     # Gulf Coast conventional regular
-]
-for sid in GAS_CANDIDATES:
-    try:
-        rows = fetch_all('petroleum/pri/spt', {
-            'frequency': 'weekly', 'start': '2024-01-01',
-            'facets[series][]': sid,
-        })
-        print(f'  {sid}: {len(rows)} rows')
-    except Exception as e:
-        print(f'  {sid}: ERROR {e}')
+try:
+    disc_rows = fetch_all('petroleum/pri/spt', {
+        'frequency': 'weekly', 'start': '2025-01-01',
+    })
+    unique_sids = sorted(set(r.get('series', '') for r in disc_rows))
+    print(f'  All series in petroleum/pri/spt ({len(unique_sids)} total):')
+    for sid in unique_sids:
+        print(f'  SERIES: {sid!r}')
+except Exception as e:
+    print(f'  Discovery failed: {e}')
 
 # ── Prices ────────────────────────────────────────────────────────────────────
 print('=== Prices ===')
