@@ -739,9 +739,9 @@ async function loadRefining() {
     const dslByWk = byWeek(dslArr);
 
     // Align on weeks where all three series have a value
-    const weeks = [...new Set([...Object.keys(wtiByWk), ...Object.keys(gasByWk), ...Object.keys(dslByWk)])].sort();
+    const allWeeks = [...new Set([...Object.keys(wtiByWk), ...Object.keys(gasByWk), ...Object.keys(dslByWk)])].sort();
     const spreadArr = [], wtiAligned = [];
-    for (const wk of weeks) {
+    for (const wk of allWeeks) {
       const wtiPt = wtiByWk[wk], gasPt = gasByWk[wk], dslPt = dslByWk[wk];
       if (!wtiPt || !gasPt || !dslPt) continue;
       // 3-2-1 crack spread: (2 × gas_$/bbl + 1 × dsl_$/bbl − 3 × WTI_$/bbl) / 3
