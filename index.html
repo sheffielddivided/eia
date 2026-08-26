@@ -697,26 +697,26 @@ async function loadRefining() {
       ? local[key].filter(d => d.date >= start && d.date <= today)
       : null;
 
+    // NY Harbor wholesale spot prices (same endpoint as WTI — no date-alignment issues)
+    const GAS_ID = 'EER_EPM0F_PF4_Y35NY_DPG';  // RBOB gasoline ($/gal)
+    const DSL_ID = 'EER_EPD2F_PF4_Y35NY_DPG';  // No.2 heating oil / diesel ($/gal)
     let wtiArr = fromLocal('RWTC');
-    let gasArr = fromLocal('EMM_EPM0_PTE_NUS_DPG');
-    let dslArr = fromLocal('EMD_EPD2D_PTE_NUS_DPG');
+    let gasArr = fromLocal(GAS_ID);
+    let dslArr = fromLocal(DSL_ID);
 
-    // Fallback: fetch crude spot prices from EIA API
-    if (!wtiArr) {
-      const url  = eiaUrl('petroleum/pri/spt', { frequency: 'weekly', 'facets[series][]': 'RWTC', start, end });
-      const json = await apiFetch(url);
-      wtiArr = (json?.response?.data ?? [])
-        .map(d => ({ date: d.period, value: parseFloat(d.value) }))
-        .filter(d => !isNaN(d.value) && d.date <= today)
-        .sort((a, b) => a.date.localeCompare(b.date));
-    }
-    // Fallback: fetch retail fuel prices from EIA API
-    if (!gasArr || !dslArr) {
-      const url  = eiaUrl('petroleum/pri/gnd', { frequency: 'weekly', 'facets[series][]': ['EMM_EPM0_PTE_NUS_DPG', 'EMD_EPD2D_PTE_NUS_DPG'], start, end });
+    // Fallback: all three from petroleum/pri/spt in one call
+    if (!wtiArr || !gasArr || !dslArr) {
+      const url = eiaUrl('petroleum/pri/spt', { frequency: 'weekly',
+        'facets[series][]': ['RWTC', GAS_ID, DSL_ID], start, end });
       const json = await apiFetch(url);
       const raw  = (json?.response?.data ?? []).filter(d => d.date <= today);
-      if (!gasArr) gasArr = raw.filter(d => d.series === 'EMM_EPM0_PTE_NUS_DPG').map(d => ({ date: d.period, value: parseFloat(d.value) })).filter(d => !isNaN(d.value)).sort((a, b) => a.date.localeCompare(b.date));
-      if (!dslArr) dslArr = raw.filter(d => d.series === 'EMD_EPD2D_PTE_NUS_DPG').map(d => ({ date: d.period, value: parseFloat(d.value) })).filter(d => !isNaN(d.value)).sort((a, b) => a.date.localeCompare(b.date));
+      const toArr = id => raw.filter(d => d.series === id)
+        .map(d => ({ date: d.period, value: parseFloat(d.value) }))
+        .filter(d => !isNaN(d.value))
+        .sort((a, b) => a.date.localeCompare(b.date));
+      if (!wtiArr) wtiArr = toArr('RWTC');
+      if (!gasArr) gasArr = toArr(GAS_ID);
+      if (!dslArr) dslArr = toArr(DSL_ID);
     }
 
     if (!wtiArr?.length || !gasArr?.length || !dslArr?.length)
@@ -767,7 +767,7 @@ function renderRefiningChart(spreadArr, wtiVals, mode) {
 
   let datasets, title, tooltipCb;
   if (mode === 'spread') {
-    title = '3-2-1 Crack Spread ($/bbl)';
+    title = '3-2-1 Crack Spread — NY Harbor spot prices ($/bbl)';
     datasets = [{
       label: '3-2-1 Crack Spread',
       data: spreadVals,
@@ -782,7 +782,7 @@ function renderRefiningChart(spreadArr, wtiVals, mode) {
     // vs. WTI: stacked area — WTI as base, crack spread on top
     // Dataset 2 y-values = WTI + spread so it sits above WTI visually;
     // fill:'-1' shades only the crack-spread band between the two lines.
-    title = '3-2-1 Crack Spread vs. WTI Crude ($/bbl)';
+    title = '3-2-1 Crack Spread vs. WTI Crude — NY Harbor spot prices ($/bbl)';
     const wtiPlusSpread = spreadVals.map((v, i) => v + wtiVals[i]);
     datasets = [
       {

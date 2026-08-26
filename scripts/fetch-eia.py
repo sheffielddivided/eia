@@ -148,7 +148,11 @@ write('data/eia/flows.json', {
 print('=== Prices ===')
 crude_rows = fetch_all('petroleum/pri/spt', {
     'frequency': 'weekly', 'start': years_ago(22),
-    'facets[series][]': ['RWTC', 'RBRTE'],
+    'facets[series][]': [
+        'RWTC', 'RBRTE',
+        'EER_EPM0F_PF4_Y35NY_DPG',   # NY Harbor RBOB gasoline spot ($/gal)
+        'EER_EPD2F_PF4_Y35NY_DPG',   # NY Harbor No.2 heating oil spot ($/gal)
+    ],
 })
 fuel_rows = fetch_all('petroleum/pri/gnd', {
     'frequency': 'weekly', 'start': years_ago(22),
