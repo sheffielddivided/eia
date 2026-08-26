@@ -144,6 +144,23 @@ write('data/eia/flows.json', {
     'lng': lng_agg,
 })
 
+# ── Spot price series discovery (one-time diagnostic) ─────────────────────────
+print('=== Spot Price Series Discovery ===')
+try:
+    disc_url = f'{BASE}/petroleum/pri/spt/facet/series/?api_key={API_KEY}'
+    with urllib.request.urlopen(disc_url, timeout=30) as r:
+        disc = json.loads(r.read())
+    all_series = disc.get('response', {}).get('facets', {}).get('series', [])
+    print(f'  Total series in petroleum/pri/spt: {len(all_series)}')
+    for s in all_series:
+        sid = s.get('id', '')
+        name = s.get('alias') or s.get('name') or ''
+        kws = ['gas', 'petrol', 'motor', 'rbob', 'y35ny', 'rgc']
+        if any(k in sid.lower() or k in name.lower() for k in kws):
+            print(f'  SERIES: {sid!r} => {name!r}')
+except Exception as e:
+    print(f'  Discovery failed: {e}')
+
 # ── Prices ────────────────────────────────────────────────────────────────────
 print('=== Prices ===')
 crude_rows = fetch_all('petroleum/pri/spt', {
