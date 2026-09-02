@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Europeisk gasslager – Fyllingsgrad</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --muted: #8b949e;
+            --accent: #388bfd;
+            --accent-dim: rgba(56,139,253,0.15);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            min-height: 100vh;
+            padding: 2rem 1.5rem;
+            max-width: 980px;
+            margin: 0 auto;
+        }
+        header { margin-bottom: 1.5rem; }
+        h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: 0.2rem; }
+        .subtitle { font-size: 0.8rem; color: var(--muted); }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1.25rem;
+        }
+        .btn {
+            padding: 0.38rem 0.9rem;
+            font-size: 0.82rem;
+            font-family: inherit;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--surface);
+            color: var(--muted);
+            cursor: pointer;
+            transition: border-color .15s, color .15s, background .15s;
+        }
+        .btn:hover { border-color: var(--accent); color: var(--accent); }
+        .btn.active {
+            background: var(--accent-dim);
+            border-color: var(--accent);
+            color: var(--accent);
+            font-weight: 500;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.25rem;
+        }
+        .chart-wrapper {
+            position: relative;
+            height: 420px;
+        }
+        @media (max-width: 600px) {
+            body { padding: 1rem; }
+            .chart-wrapper { height: 260px; }
+        }
+
+        .loading-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(22,27,34,.85);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            font-size: .85rem;
+            color: var(--muted);
+            gap: .6rem;
+        }
+        .spinner {
+            width: 16px; height: 16px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin .7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-overlay.hidden { display: none; }
+
+        .error-box {
+            display: none;
+            margin-top: 1rem;
+            padding: .7rem 1rem;
+            background: rgba(248,81,73,.1);
+            border: 1px solid rgba(248,81,73,.3);
+            border-radius: 6px;
+            font-size: .82rem;
+            color: #f85149;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+            gap: .75rem;
+            margin-top: 1rem;
+        }
+        .stat {
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: .7rem 1rem;
+        }
+        .stat-label {
+            font-size: .7rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            margin-bottom: .3rem;
+        }
+        .stat-value { font-size: 1.45rem; font-weight: 600; letter-spacing: -.02em; }
+        .stat-sub { font-size: .72rem; color: var(--muted); margin-top: .15rem; }
+
+        .section-heading {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text);
+            margin: 2rem 0 1.1rem;
+            padding-bottom: .6rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .section-heading span {
+            font-size: .75rem;
+            font-weight: 400;
+            color: var(--muted);
+            margin-left: .6rem;
+        }
+        footer {
+            margin-top: 1.25rem;
+            font-size: .72rem;
+            color: var(--muted);
+        }
+        footer a { color: var(--muted); }
+
+        /* ── UMM table ─────────────────────────────────────────────────────── */
+        .umm-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: .8rem;
+            margin-top: .75rem;
+        }
+        .umm-table th {
+            text-align: left;
+            padding: .4rem .65rem;
+            color: var(--muted);
+            font-size: .7rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            border-bottom: 1px solid var(--border);
+        }
+        .umm-table td {
+            padding: .55rem .65rem;
+            border-bottom: 1px solid rgba(48,54,61,.55);
+            vertical-align: middle;
+            color: var(--text);
+            line-height: 1.35;
+        }
+        .umm-table tbody tr:last-child td { border-bottom: none; }
+        .umm-table tbody tr:hover td { background: rgba(255,255,255,.02); }
+        .umm-badge {
+            display: inline-block;
+            padding: .18rem .5rem;
+            border-radius: 4px;
+            font-size: .68rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+            white-space: nowrap;
+        }
+        .badge-withdrawal { background: rgba(45,212,191,.12); color: #2dd4bf; border: 1px solid rgba(45,212,191,.3); }
+        .badge-injection  { background: rgba(249,115,22,.12);  color: #f97316; border: 1px solid rgba(249,115,22,.3); }
+        .badge-unplanned  { background: rgba(248,81,73,.12);   color: #f85149; border: 1px solid rgba(248,81,73,.3); }
+        .badge-planned    { background: rgba(139,148,158,.1);  color: var(--muted); border: 1px solid var(--border); }
+        .umm-muted { color: var(--muted); }
+        .umm-empty {
+            text-align: center;
+            padding: 2.5rem 1rem;
+            color: var(--muted);
+            font-size: .85rem;
+        }
+        .umm-cap { font-variant-numeric: tabular-nums; white-space: nowrap; }
+        @media (max-width: 640px) {
+            .umm-table .col-cap, .umm-table .col-zone { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Europeisk gasslager</h1>
+    <p class="subtitle">Fyllingsgrad i % av kapasitet &mdash; data fra AGSI+ / Gas Infrastructure Europe</p>
+</header>
+
+<div class="controls" id="controls">
+    <button class="btn active" data-key="eu">Europa (total)</button>
+    <button class="btn" data-key="de">Tyskland</button>
+    <button class="btn" data-key="it">Italia</button>
+    <button class="btn" data-key="nl">Nederland</button>
+    <button class="btn" data-key="fr">Frankrike</button>
+</div>
+
+<div class="card">
+    <div class="chart-wrapper">
+        <canvas id="myChart"></canvas>
+        <div class="loading-overlay" id="loading">
+            <div class="spinner"></div>
+            Laster data&hellip;
+        </div>
+    </div>
+    <div class="error-box" id="errorBox"></div>
+    <div class="stats-grid" id="statsGrid"></div>
+</div>
+
+<h2 class="section-heading">
+    LNG import – send-out (regassifisering)
+    <span>14-dagers glidende snitt &middot; GWh/dag</span>
+</h2>
+
+<div class="controls" id="lng-controls">
+    <button class="btn active" data-key="eu">Europa (total)</button>
+    <button class="btn" data-key="es">Spania</button>
+    <button class="btn" data-key="fr">Frankrike</button>
+    <button class="btn" data-key="it">Italia</button>
+    <button class="btn" data-key="nl">Nederland</button>
+</div>
+
+<div class="card">
+    <div class="chart-wrapper">
+        <canvas id="lngChart"></canvas>
+        <div class="loading-overlay" id="lngLoading">
+            <div class="spinner"></div>
+            Laster data&hellip;
+        </div>
+    </div>
+    <div class="error-box" id="lngErrorBox"></div>
+    <div class="stats-grid" id="lngStatsGrid"></div>
+</div>
+
+<h2 class="section-heading">
+    Gaslagerflyt og LNG-import – EU total
+    <span>Lagerinjeksjon, lagertrekk og LNG &middot; 14-dagers glidende snitt &middot; GWh/dag &middot; Stiplet = 5-årssnitt</span>
+</h2>
+
+<div class="card">
+    <div class="chart-wrapper">
+        <canvas id="supplyChart"></canvas>
+        <div class="loading-overlay" id="supplyLoading">
+            <div class="spinner"></div>
+            Laster data&hellip;
+        </div>
+    </div>
+    <div class="error-box" id="supplyErrorBox"></div>
+    <div class="stats-grid" id="supplyStatsGrid"></div>
+</div>
+
+<h2 class="section-heading">
+    Aktive kapasitetsvarsler (UMM)
+    <span>Driftsavbrudd og kapasitetsreduksjoner &middot; kilde: IIP+ (GIE)</span>
+</h2>
+
+<div class="card">
+    <div id="ummLoading" style="padding:1.5rem 0;display:flex;align-items:center;justify-content:center;gap:.6rem;color:var(--muted);font-size:.85rem">
+        <div class="spinner"></div>
+        Laster varsler&hellip;
+    </div>
+    <div class="error-box" id="ummErrorBox"></div>
+    <div class="stats-grid" id="ummStatsGrid"></div>
+    <div id="ummContent"></div>
+</div>
+
+<footer>
+    Kilde: <a href="https://agsi.gie.eu" target="_blank" rel="noopener">AGSI+</a> (gasslager, injeksjon og lagertrekk),
+    <a href="https://alsi.gie.eu" target="_blank" rel="noopener">ALSI+</a> (LNG-terminaler og import) og
+    <a href="https://iip.gie.eu" target="_blank" rel="noopener">IIP+</a> (kapasitetsvarsler) / Gas Infrastructure Europe.
+    Oppdateres daglig med 1&ndash;2 dagers forsinkelse.
+</footer>
+
+<script>
+const API_KEY    = 'eb259b94628dbfddbaff45e4b3f772a2';
+const BASE_URL   = 'https://agsi.gie.eu/api';
+const CUR_YEAR   = new Date().getFullYear();
+const HIST_YEARS = [CUR_YEAR-5, CUR_YEAR-4, CUR_YEAR-3, CUR_YEAR-2, CUR_YEAR-1];
+const MONTHS     = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des'];
+
+// 366 MM-DD keys using 2000 (leap year) as template
+const DAY_KEYS = (() => {
+    const keys = [], d = new Date(2000, 0, 1);
+    while (d.getFullYear() === 2000) {
+        keys.push(
+            String(d.getMonth()+1).padStart(2,'0') + '-' +
+            String(d.getDate()).padStart(2,'0')
+        );
+        d.setDate(d.getDate()+1);
+    }
+    return keys;
+})();
+
+const SELECTIONS = {
+    eu: { label: 'Europa (total)', type: 'eu' },  // type=eu gives EU aggregate
+    de: { label: 'Tyskland',       country: 'DE' },
+    it: { label: 'Italia',         country: 'IT' },
+    nl: { label: 'Nederland',      country: 'NL' },
+    fr: { label: 'Frankrike',      country: 'FR' },
+};
+
+// Promise-based caches: concurrent callers share a single in-flight request
+const agsiRequestCache = {};  // "selKey-year" → Promise<records[]>
+const alsiRequestCache = {};  // "selKey-year" → Promise<records[]>
+
+let chartInstance = null;
+
+function fetchAgsiRecords(selKey, year) {
+    const id = `${selKey}-${year}`;
+    if (!agsiRequestCache[id]) {
+        const sel  = SELECTIONS[selKey];
+        const from = `${year}-01-01`;
+        const to   = year === CUR_YEAR ? new Date().toISOString().slice(0,10) : `${year}-12-31`;
+        const params = new URLSearchParams({ from, to, size: '400' });
+        if (sel.country) params.set('country', sel.country);
+        if (sel.type)    params.set('type', sel.type);
+        const url = `${BASE_URL}?${params}`;
+        agsiRequestCache[id] = fetch(url, { headers: { 'x-key': API_KEY } })
+            .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status} fra AGSI API (${selKey}/${year})`); return r.json(); })
+            .then(j => {
+                const recs = Array.isArray(j.data) ? j.data : [];
+                if (recs[0]) {
+                    console.log(`[AGSI] ${selKey}/${year}: ${recs.length} records, url=${url}`);
+                    console.log(`[AGSI] ${selKey}/${year} first record keys:`, Object.keys(recs[0]));
+                    console.log(`[AGSI] ${selKey}/${year} first record:`, recs[0]);
+                } else {
+                    console.warn(`[AGSI] ${selKey}/${year}: 0 records, url=${url}`);
+                }
+                return recs;
+            });
+    }
+    return agsiRequestCache[id];
+}
+
+async function fetchYear(selKey, year) {
+    const records = await fetchAgsiRecords(selKey, year);
+    const map = {};
+    for (const r of records) {
+        const dateStr = r.gasDayStart || r.gas_day || r.date || '';
+        if (!dateStr) continue;
+        const mmdd = dateStr.slice(5, 10);
+        const val  = parseFloat(r.full);
+        if (!isNaN(val)) map[mmdd] = val;
+    }
+    return map;
+}
+
+async function loadAndRender(selKey) {
+    const loadingEl = document.getElementById('loading');
+    const errorEl   = document.getElementById('errorBox');
+    const statsEl   = document.getElementById('statsGrid');
+
+    loadingEl.classList.remove('hidden');
+    errorEl.style.display = 'none';
+    statsEl.innerHTML = '';
+
+    try {
+        const [curMap, ...histMaps] = await Promise.all([
+            fetchYear(selKey, CUR_YEAR),
+            ...HIST_YEARS.map(y => fetchYear(selKey, y)),
+        ]);
+
+        const curData = DAY_KEYS.map(k => curMap[k] ?? null);
+        const minData = DAY_KEYS.map(k => {
+            const vals = histMaps.map(m => m[k]).filter(v => v != null);
+            return vals.length ? Math.min(...vals) : null;
+        });
+        const maxData = DAY_KEYS.map(k => {
+            const vals = histMaps.map(m => m[k]).filter(v => v != null);
+            return vals.length ? Math.max(...vals) : null;
+        });
+
+        const now      = new Date();
+        const todayKey = String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+        const todayIdx = DAY_KEYS.indexOf(todayKey);
+
+        renderChart(curData, minData, maxData, todayIdx);
+        renderStats(curData, minData, maxData);
+    } catch (err) {
+        errorEl.textContent = `Feil ved henting av data: ${err.message}`;
+        errorEl.style.display = 'block';
+        console.error(err);
+    } finally {
+        loadingEl.classList.add('hidden');
+    }
+}
+
+function renderChart(curData, minData, maxData, todayIdx) {
+    const ctx = document.getElementById('myChart').getContext('2d');
+    if (chartInstance) chartInstance.destroy();
+
+    const xLabels = DAY_KEYS.map(k =>
+        k.endsWith('-01') ? MONTHS[parseInt(k.slice(0,2))-1] : ''
+    );
+
+    const histLabel = `Spenn ${HIST_YEARS[0]}–${HIST_YEARS[HIST_YEARS.length-1]}`;
+
+    chartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: xLabels,
+            datasets: [
+                {
+                    // Upper bound of area — hidden from legend
+                    label: '_max',
+                    data: maxData,
+                    borderColor: 'transparent',
+                    backgroundColor: 'rgba(56,139,253,0.18)',
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.35,
+                    spanGaps: true,
+                    order: 3,
+                },
+                {
+                    // Lower bound fills to upper bound, creating the band
+                    label: histLabel,
+                    data: minData,
+                    borderColor: 'transparent',
+                    backgroundColor: 'rgba(56,139,253,0.18)',
+                    pointRadius: 0,
+                    fill: '-1',
+                    tension: 0.35,
+                    spanGaps: true,
+                    order: 3,
+                },
+                {
+                    label: String(CUR_YEAR),
+                    data: curData,
+                    borderColor: '#388bfd',
+                    backgroundColor: 'transparent',
+                    pointRadius: 0,
+                    borderWidth: 2.5,
+                    fill: false,
+                    tension: 0.3,
+                    spanGaps: false,
+                    order: 1,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: {
+                        color: '#8b949e',
+                        boxWidth: 14,
+                        boxHeight: 14,
+                        padding: 16,
+                        font: { size: 12 },
+                        // Hide the invisible max dataset from legend
+                        filter: item => !item.text.startsWith('_'),
+                    },
+                },
+                tooltip: {
+                    backgroundColor: '#1c2129',
+                    borderColor: '#30363d',
+                    borderWidth: 1,
+                    titleColor: '#8b949e',
+                    bodyColor: '#c9d1d9',
+                    callbacks: {
+                        title: items => DAY_KEYS[items[0].dataIndex] || '',
+                        label: item => {
+                            if (item.raw == null || item.dataset.label.startsWith('_')) return null;
+                            return `  ${item.dataset.label}: ${item.raw.toFixed(1)} %`;
+                        },
+                    },
+                },
+                annotation: {
+                    annotations: todayIdx >= 0 ? {
+                        todayLine: {
+                            type: 'line',
+                            xMin: todayIdx,
+                            xMax: todayIdx,
+                            borderColor: 'rgba(200,200,200,0.3)',
+                            borderWidth: 1,
+                            borderDash: [4, 4],
+                            label: {
+                                display: true,
+                                content: 'I dag',
+                                color: '#8b949e',
+                                font: { size: 10 },
+                                position: 'start',
+                                backgroundColor: 'transparent',
+                                padding: 2,
+                            },
+                        },
+                    } : {},
+                },
+            },
+            scales: {
+                x: {
+                    grid: { color: '#21262d', tickLength: 0 },
+                    ticks: {
+                        color: '#8b949e',
+                        font: { size: 11 },
+                        maxRotation: 0,
+                        autoSkip: false,
+                        callback: (_, idx) => xLabels[idx] || null,
+                    },
+                },
+                y: {
+                    min: 0,
+                    max: 100,
+                    grid: { color: '#21262d' },
+                    ticks: {
+                        color: '#8b949e',
+                        font: { size: 11 },
+                        callback: v => v + '%',
+                    },
+                },
+            },
+        },
+    });
+}
+
+function renderStats(curData, minData, maxData) {
+    let latestVal = null, latestIdx = -1;
+    for (let i = curData.length - 1; i >= 0; i--) {
+        if (curData[i] != null) { latestVal = curData[i]; latestIdx = i; break; }
+    }
+    if (latestVal == null) return;
+
+    const histMin  = minData[latestIdx];
+    const histMax  = maxData[latestIdx];
+    const dateStr  = DAY_KEYS[latestIdx];
+
+    let statusColor = '#d29922'; // within range
+    let statusText  = 'Innenfor 5-årsintervall';
+    if (histMin != null && latestVal < histMin) {
+        statusColor = '#f85149'; statusText = 'Under 5-årsminimum';
+    } else if (histMax != null && latestVal > histMax) {
+        statusColor = '#3fb950'; statusText = 'Over 5-årsmaksimum';
+    }
+
+    document.getElementById('statsGrid').innerHTML = `
+        <div class="stat">
+            <div class="stat-label">Siste måling</div>
+            <div class="stat-value">${latestVal.toFixed(1)} %</div>
+            <div class="stat-sub">${dateStr} ${CUR_YEAR}</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">5-årsminimum (${dateStr})</div>
+            <div class="stat-value">${histMin != null ? histMin.toFixed(1)+' %' : '—'}</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">5-årsmaksimum (${dateStr})</div>
+            <div class="stat-value">${histMax != null ? histMax.toFixed(1)+' %' : '—'}</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">Status</div>
+            <div class="stat-value" style="font-size:.95rem;line-height:1.3;color:${statusColor}">${statusText}</div>
+        </div>
+    `;
+}
+
+document.getElementById('controls').addEventListener('click', e => {
+    const btn = e.target.closest('.btn[data-key]');
+    if (!btn) return;
+    document.querySelectorAll('#controls .btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadAndRender(btn.dataset.key);
+});
+
+// ── LNG (ALSI) ─────────────────────────────────────────────────────────────
+
+const ALSI_URL = 'https://alsi.gie.eu/api';
+const LNG_SELECTIONS = {
+    eu: { label: 'Europa (total)', type: 'eu' },
+    es: { label: 'Spania',         country: 'ES' },
+    fr: { label: 'Frankrike',      country: 'FR' },
+    it: { label: 'Italia',         country: 'IT' },
+    nl: { label: 'Nederland',      country: 'NL' },
+};
+
+let lngChartInstance = null;
+
+function rollingAvg(arr, window = 14) {
+    const half = Math.floor(window / 2);
+    return arr.map((_, i) => {
+        const slice = arr.slice(Math.max(0, i - half), Math.min(arr.length, i + half + 1))
+                        .filter(v => v != null);
+        return slice.length >= Math.ceil(window / 3)
+            ? slice.reduce((a, b) => a + b, 0) / slice.length
+            : null;
+    });
+}
+
+function fetchAlsiRecords(selKey, year) {
+    const id = `${selKey}-${year}`;
+    if (!alsiRequestCache[id]) {
+        const sel  = LNG_SELECTIONS[selKey];
+        const from = `${year}-01-01`;
+        const to   = year === CUR_YEAR ? new Date().toISOString().slice(0,10) : `${year}-12-31`;
+        const params = new URLSearchParams({ from, to, size: '400' });
+        if (sel.country) params.set('country', sel.country);
+        if (sel.type)    params.set('type', sel.type);
+        const url = `${ALSI_URL}?${params}`;
+        alsiRequestCache[id] = fetch(url, { headers: { 'x-key': API_KEY } })
+            .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status} fra ALSI API (${selKey}/${year})`); return r.json(); })
+            .then(j => {
+                const recs = Array.isArray(j.data) ? j.data : [];
+                if (recs[0]) {
+                    console.log(`[ALSI] ${selKey}/${year}: ${recs.length} records`);
+                    console.log(`[ALSI] ${selKey}/${year} first record keys:`, Object.keys(recs[0]));
+                    console.log(`[ALSI] ${selKey}/${year} first record:`, recs[0]);
+                } else {
+                    console.warn(`[ALSI] ${selKey}/${year}: 0 records`);
+                }
+                return recs;
+            });
+    }
+    return alsiRequestCache[id];
+}
+
+async function fetchAlsiYear(selKey, year) {
+    const records = await fetchAlsiRecords(selKey, year);
+    const map = {};
+    for (const r of records) {
+        const dateStr = r.gasDayStart || r.gas_day || r.date || '';
+        if (!dateStr) continue;
+        const mmdd = dateStr.slice(5, 10);
+        // Try multiple field names: sendOut (primary), dtrs (declared total regasification sendout), dtrsActual
+        const val = parseFloat(r.sendOut ?? r.dtrs ?? r.dtrsActual ?? r.send ?? NaN);
+        if (!isNaN(val)) map[mmdd] = val;
+    }
+    return map;
+}
+
+async function loadAndRenderLng(selKey) {
+    const loadingEl = document.getElementById('lngLoading');
+    const errorEl   = document.getElementById('lngErrorBox');
+    const statsEl   = document.getElementById('lngStatsGrid');
+
+    loadingEl.classList.remove('hidden');
+    errorEl.style.display = 'none';
+    statsEl.innerHTML = '';
+
+    try {
+        const [curMap, ...histMaps] = await Promise.all([
+            fetchAlsiYear(selKey, CUR_YEAR),
+            ...HIST_YEARS.map(y => fetchAlsiYear(selKey, y)),
+        ]);
+
+        // Raw arrays aligned to DAY_KEYS
+        const curRaw  = DAY_KEYS.map(k => curMap[k] ?? null);
+        const histRaw = histMaps.map(m => DAY_KEYS.map(k => m[k] ?? null));
+
+        // Apply 14-day rolling average
+        const curSmooth  = rollingAvg(curRaw);
+        const histSmooth = histRaw.map(rollingAvg);
+
+        const minData = DAY_KEYS.map((_, i) => {
+            const vals = histSmooth.map(h => h[i]).filter(v => v != null);
+            return vals.length ? Math.min(...vals) : null;
+        });
+        const maxData = DAY_KEYS.map((_, i) => {
+            const vals = histSmooth.map(h => h[i]).filter(v => v != null);
+            return vals.length ? Math.max(...vals) : null;
+        });
+
+        const now      = new Date();
+        const todayKey = String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+        const todayIdx = DAY_KEYS.indexOf(todayKey);
+
+        renderLngChart(curSmooth, minData, maxData, todayIdx);
+        renderLngStats(curSmooth, curRaw, minData, maxData);
+    } catch (err) {
+        errorEl.textContent = `Feil ved henting av data: ${err.message}`;
+        errorEl.style.display = 'block';
+        console.error(err);
+    } finally {
+        loadingEl.classList.add('hidden');
+    }
+}
+
+function renderLngChart(curData, minData, maxData, todayIdx) {
+    const ctx = document.getElementById('lngChart').getContext('2d');
+    if (lngChartInstance) lngChartInstance.destroy();
+
+    const xLabels  = DAY_KEYS.map(k =>
+        k.endsWith('-01') ? MONTHS[parseInt(k.slice(0,2))-1] : ''
+    );
+    const histLabel = `Spenn ${HIST_YEARS[0]}–${HIST_YEARS[HIST_YEARS.length-1]}`;
+
+    lngChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: xLabels,
+            datasets: [
+                {
+                    label: '_max',
+                    data: maxData,
+                    borderColor: 'transparent',
+                    backgroundColor: 'rgba(230,179,23,0.18)',
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.35,
+                    spanGaps: true,
+                    order: 3,
+                },
+                {
+                    label: histLabel,
+                    data: minData,
+                    borderColor: 'transparent',
+                    backgroundColor: 'rgba(230,179,23,0.18)',
+                    pointRadius: 0,
+                    fill: '-1',
+                    tension: 0.35,
+                    spanGaps: true,
+                    order: 3,
+                },
+                {
+                    label: String(CUR_YEAR),
+                    data: curData,
+                    borderColor: '#e6b317',
+                    backgroundColor: 'transparent',
+                    pointRadius: 0,
+                    borderWidth: 2.5,
+                    fill: false,
+                    tension: 0.3,
+                    spanGaps: false,
+                    order: 1,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: {
+                        color: '#8b949e',
+                        boxWidth: 14, boxHeight: 14, padding: 16,
+                        font: { size: 12 },
+                        filter: item => !item.text.startsWith('_'),
+                    },
+                },
+                tooltip: {
+                    backgroundColor: '#1c2129',
+                    borderColor: '#30363d',
+                    borderWidth: 1,
+                    titleColor: '#8b949e',
+                    bodyColor: '#c9d1d9',
+                    callbacks: {
+                        title: items => DAY_KEYS[items[0].dataIndex] || '',
+                        label: item => {
+                            if (item.raw == null || item.dataset.label.startsWith('_')) return null;
+                            return `  ${item.dataset.label}: ${Math.round(item.raw)} GWh/d`;
+                        },
+                    },
+                },
+                annotation: {
+                    annotations: todayIdx >= 0 ? {
+                        todayLine: {
+                            type: 'line',
+                            xMin: todayIdx, xMax: todayIdx,
+                            borderColor: 'rgba(200,200,200,0.3)',
+                            borderWidth: 1,
+                            borderDash: [4, 4],
+                            label: {
+                                display: true, content: 'I dag',
+                                color: '#8b949e', font: { size: 10 },
+                                position: 'start', backgroundColor: 'transparent', padding: 2,
+                            },
+                        },
+                    } : {},
+                },
+            },
+            scales: {
+                x: {
+                    grid: { color: '#21262d', tickLength: 0 },
+                    ticks: {
+                        color: '#8b949e', font: { size: 11 },
+                        maxRotation: 0, autoSkip: false,
+                        callback: (_, idx) => xLabels[idx] || null,
+                    },
+                },
+                y: {
+                    min: 0,
+                    grid: { color: '#21262d' },
+                    ticks: {
+                        color: '#8b949e', font: { size: 11 },
+                        callback: v => v >= 1000 ? (v/1000).toFixed(1)+'k' : v,
+                    },
+                    title: {
+                        display: true, text: 'GWh/dag',
+                        color: '#8b949e', font: { size: 11 },
+                    },
+                },
+            },
+        },
+    });
+}
+
+function renderLngStats(smoothData, rawData, minData, maxData) {
+    // Find latest non-null smoothed value
+    let latestSmooth = null, latestIdx = -1;
+    for (let i = smoothData.length - 1; i >= 0; i--) {
+        if (smoothData[i] != null) { latestSmooth = smoothData[i]; latestIdx = i; break; }
+    }
+    if (latestSmooth == null) return;
+
+    // Latest raw value
+    let latestRaw = null;
+    for (let i = rawData.length - 1; i >= 0; i--) {
+        if (rawData[i] != null) { latestRaw = rawData[i]; break; }
+    }
+
+    const histMin = minData[latestIdx];
+    const histMax = maxData[latestIdx];
+    const dateStr = DAY_KEYS[latestIdx];
+
+    let statusColor = '#d29922', statusText = 'Innenfor 5-årsintervall';
+    if (histMin != null && latestSmooth < histMin) { statusColor = '#f85149'; statusText = 'Under 5-årsminimum'; }
+    else if (histMax != null && latestSmooth > histMax) { statusColor = '#3fb950'; statusText = 'Over 5-årsmaksimum'; }
+
+    document.getElementById('lngStatsGrid').innerHTML = `
+        <div class="stat">
+            <div class="stat-label">Siste (råverdi)</div>
+            <div class="stat-value">${latestRaw != null ? Math.round(latestRaw) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
+            <div class="stat-sub">Siste gasdag</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">14-dagers snitt (${dateStr})</div>
+            <div class="stat-value">${Math.round(latestSmooth)} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">5-årsmin snitt (${dateStr})</div>
+            <div class="stat-value">${histMin != null ? Math.round(histMin) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">Status</div>
+            <div class="stat-value" style="font-size:.95rem;line-height:1.3;color:${statusColor}">${statusText}</div>
+        </div>
+    `;
+}
+
+document.getElementById('lng-controls').addEventListener('click', e => {
+    const btn = e.target.closest('.btn[data-key]');
+    if (!btn) return;
+    document.querySelectorAll('#lng-controls .btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadAndRenderLng(btn.dataset.key);
+});
+
+// ── Supply: Storage withdrawal (AGSI) + LNG send-out (ALSI) for EU ──────────
+// Note: GIE's IIP API contains only infrastructure unavailability messages,
+// not physical pipeline flow data, so pipeline imports are not available here.
+// fetchAgsiFlowYear reuses agsiRequestCache set by fetchYear — no extra API calls.
+
+let supplyChartInstance = null;
+
+async function fetchAgsiFlowYear(year) {
+    // Shares the same in-flight/cached AGSI EU request as the main storage chart
+    const records = await fetchAgsiRecords('eu', year);
+    const wd = {}, inj = {};
+    for (const r of records) {
+        const dateStr = r.gasDayStart || r.gas_day || r.date || '';
+        if (!dateStr) continue;
+        const mmdd = dateStr.slice(5, 10);
+        const w = parseFloat(r.withdrawal ?? NaN);
+        const j = parseFloat(r.injection  ?? NaN);
+        if (!isNaN(w)) wd[mmdd]  = w;
+        if (!isNaN(j)) inj[mmdd] = j;
+    }
+    return { wd, inj };
+}
+
+async function loadAndRenderSupply() {
+    const loadingEl = document.getElementById('supplyLoading');
+    const errorEl   = document.getElementById('supplyErrorBox');
+    const statsEl   = document.getElementById('supplyStatsGrid');
+
+    loadingEl.classList.remove('hidden');
+    errorEl.style.display = 'none';
+    statsEl.innerHTML = '';
+
+    try {
+        const [flowCur, ...flowHist] = await Promise.all([
+            fetchAgsiFlowYear(CUR_YEAR),
+            ...HIST_YEARS.map(y => fetchAgsiFlowYear(y)),
+        ]);
+        const [lngCur, ...lngHist] = await Promise.all([
+            fetchAlsiYear('eu', CUR_YEAR),
+            ...HIST_YEARS.map(y => fetchAlsiYear('eu', y)),
+        ]);
+
+        const wdCurRaw   = DAY_KEYS.map(k => flowCur.wd[k]  ?? null);
+        const injCurRaw  = DAY_KEYS.map(k => flowCur.inj[k] ?? null);
+        const lngCurRaw  = DAY_KEYS.map(k => lngCur[k]      ?? null);
+        const wdHistRaw  = flowHist.map(f => DAY_KEYS.map(k => f.wd[k]  ?? null));
+        const injHistRaw = flowHist.map(f => DAY_KEYS.map(k => f.inj[k] ?? null));
+        const lngHistRaw = lngHist.map(m  => DAY_KEYS.map(k => m[k]     ?? null));
+
+        const wdSmooth  = rollingAvg(wdCurRaw);
+        const injSmooth = rollingAvg(injCurRaw);
+        const lngSmooth = rollingAvg(lngCurRaw);
+
+        const avg = (histRaw) => DAY_KEYS.map((_, i) => {
+            const vals = histRaw.map(arr => arr[i]).filter(v => v != null);
+            return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+        });
+        const wdAvgSmooth  = rollingAvg(avg(wdHistRaw));
+        const injAvgSmooth = rollingAvg(avg(injHistRaw));
+        const lngAvgSmooth = rollingAvg(avg(lngHistRaw));
+
+        const now      = new Date();
+        const todayKey = String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+        const todayIdx = DAY_KEYS.indexOf(todayKey);
+
+        renderSupplyChart(wdSmooth, injSmooth, lngSmooth, wdAvgSmooth, injAvgSmooth, lngAvgSmooth, todayIdx);
+        renderSupplyStats(wdSmooth, injSmooth, lngSmooth, wdAvgSmooth, injAvgSmooth, lngAvgSmooth);
+    } catch (err) {
+        errorEl.textContent = `Feil: ${err.message}`;
+        errorEl.style.display = 'block';
+        console.error(err);
+    } finally {
+        loadingEl.classList.add('hidden');
+    }
+}
+
+function renderSupplyChart(wdCur, injCur, lngCur, wdAvg, injAvg, lngAvg, todayIdx) {
+    const ctx = document.getElementById('supplyChart').getContext('2d');
+    if (supplyChartInstance) supplyChartInstance.destroy();
+
+    const xLabels  = DAY_KEYS.map(k =>
+        k.endsWith('-01') ? MONTHS[parseInt(k.slice(0,2))-1] : ''
+    );
+    const avgLabel = `Snitt ${HIST_YEARS[0]}–${HIST_YEARS[HIST_YEARS.length-1]}`;
+
+    supplyChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: xLabels,
+            datasets: [
+                {
+                    label: `Lagertrekk ${CUR_YEAR}`,
+                    data: wdCur,
+                    borderColor: '#2dd4bf',
+                    backgroundColor: 'rgba(45,212,191,0.18)',
+                    pointRadius: 0,
+                    borderWidth: 2,
+                    fill: 'origin',
+                    tension: 0.3,
+                    spanGaps: false,
+                    order: 2,
+                },
+                {
+                    label: `Lagerinjeksjon ${CUR_YEAR}`,
+                    data: injCur,
+                    borderColor: '#f97316',
+                    backgroundColor: 'rgba(249,115,22,0.18)',
+                    pointRadius: 0,
+                    borderWidth: 2,
+                    fill: 'origin',
+                    tension: 0.3,
+                    spanGaps: false,
+                    order: 2,
+                },
+                {
+                    label: `LNG import ${CUR_YEAR}`,
+                    data: lngCur,
+                    borderColor: '#e6b317',
+                    backgroundColor: 'rgba(230,179,23,0.18)',
+                    pointRadius: 0,
+                    borderWidth: 2,
+                    fill: 'origin',
+                    tension: 0.3,
+                    spanGaps: false,
+                    order: 2,
+                },
+                {
+                    label: `Lagertrekk ${avgLabel}`,
+                    data: wdAvg,
+                    borderColor: 'rgba(45,212,191,0.55)',
+                    backgroundColor: 'transparent',
+                    pointRadius: 0,
+                    borderWidth: 1.5,
+                    borderDash: [5, 4],
+                    fill: false,
+                    tension: 0.3,
+                    spanGaps: true,
+                    order: 3,
+                },
+                {
+                    label: `Injeksjon ${avgLabel}`,
+                    data: injAvg,
+                    borderColor: 'rgba(249,115,22,0.55)',
+                    backgroundColor: 'transparent',
+                    pointRadius: 0,
+                    borderWidth: 1.5,
+                    borderDash: [5, 4],
+                    fill: false,
+                    tension: 0.3,
+                    spanGaps: true,
+                    order: 3,
+                },
+                {
+                    label: `LNG ${avgLabel}`,
+                    data: lngAvg,
+                    borderColor: 'rgba(230,179,23,0.55)',
+                    backgroundColor: 'transparent',
+                    pointRadius: 0,
+                    borderWidth: 1.5,
+                    borderDash: [5, 4],
+                    fill: false,
+                    tension: 0.3,
+                    spanGaps: true,
+                    order: 3,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: {
+                        color: '#8b949e',
+                        boxWidth: 14, boxHeight: 14, padding: 12,
+                        font: { size: 11 },
+                    },
+                },
+                tooltip: {
+                    backgroundColor: '#1c2129',
+                    borderColor: '#30363d',
+                    borderWidth: 1,
+                    titleColor: '#8b949e',
+                    bodyColor: '#c9d1d9',
+                    callbacks: {
+                        title: items => DAY_KEYS[items[0].dataIndex] || '',
+                        label: item => {
+                            if (item.raw == null) return null;
+                            return `  ${item.dataset.label}: ${Math.round(item.raw)} GWh/d`;
+                        },
+                    },
+                },
+                annotation: {
+                    annotations: todayIdx >= 0 ? {
+                        todayLine: {
+                            type: 'line',
+                            xMin: todayIdx, xMax: todayIdx,
+                            borderColor: 'rgba(200,200,200,0.3)',
+                            borderWidth: 1, borderDash: [4, 4],
+                            label: {
+                                display: true, content: 'I dag', color: '#8b949e',
+                                font: { size: 10 }, position: 'start',
+                                backgroundColor: 'transparent', padding: 2,
+                            },
+                        },
+                    } : {},
+                },
+            },
+            scales: {
+                x: {
+                    grid: { color: '#21262d', tickLength: 0 },
+                    ticks: {
+                        color: '#8b949e', font: { size: 11 },
+                        maxRotation: 0, autoSkip: false,
+                        callback: (_, idx) => xLabels[idx] || null,
+                    },
+                },
+                y: {
+                    min: 0,
+                    grid: { color: '#21262d' },
+                    ticks: {
+                        color: '#8b949e', font: { size: 11 },
+                        callback: v => v >= 1000 ? (v/1000).toFixed(1)+'k' : v,
+                    },
+                    title: {
+                        display: true, text: 'GWh/dag',
+                        color: '#8b949e', font: { size: 11 },
+                    },
+                },
+            },
+        },
+    });
+}
+
+function renderSupplyStats(wdCur, injCur, lngCur, wdAvg, injAvg, lngAvg) {
+    let latestIdx = -1;
+    for (let i = wdCur.length - 1; i >= 0; i--) {
+        if (wdCur[i] != null || injCur[i] != null || lngCur[i] != null) { latestIdx = i; break; }
+    }
+    if (latestIdx < 0) return;
+
+    const wdVal  = wdCur[latestIdx],  injVal  = injCur[latestIdx],  lngVal  = lngCur[latestIdx];
+    const wdAvgV = wdAvg[latestIdx],  injAvgV = injAvg[latestIdx],  lngAvgV = lngAvg[latestIdx];
+    const dateStr = DAY_KEYS[latestIdx];
+
+    const fmt = (v, color) =>
+        `<div class="stat-value" style="color:${color}">${v != null ? Math.round(v) : '—'} <small style="font-size:.8rem;font-weight:400">GWh/d</small></div>`;
+
+    document.getElementById('supplyStatsGrid').innerHTML = `
+        <div class="stat">
+            <div class="stat-label">Lagertrekk (${dateStr})</div>
+            ${fmt(wdVal, '#2dd4bf')}
+            <div class="stat-sub">5-årssnitt: ${wdAvgV != null ? Math.round(wdAvgV) : '—'} GWh/d</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">Lagerinjeksjon (${dateStr})</div>
+            ${fmt(injVal, '#f97316')}
+            <div class="stat-sub">5-årssnitt: ${injAvgV != null ? Math.round(injAvgV) : '—'} GWh/d</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">LNG import (${dateStr})</div>
+            ${fmt(lngVal, '#e6b317')}
+            <div class="stat-sub">5-årssnitt: ${lngAvgV != null ? Math.round(lngAvgV) : '—'} GWh/d</div>
+        </div>
+    `;
+}
+
+loadAndRender('eu');
+loadAndRenderLng('eu');
+loadAndRenderSupply();
+
+// ── UMM alerts: active capacity curtailments from IIP+ ───────────────────────
+const IIP_URL = 'https://iip.gie.eu/api';
+// IIP doesn't send CORS headers, so browser requests need a proxy.
+// corsproxy.io forwards the request and injects Access-Control-Allow-Origin: *
+const CORS_PROXY = 'https://corsproxy.io/?url=';
+
+async function fetchUmms(messageType) {
+    const params = new URLSearchParams({ message: messageType, status: 'active', size: '200' });
+    const iipUrl = `${IIP_URL}?${params}`;
+    const r = await fetch(`${CORS_PROXY}${encodeURIComponent(iipUrl)}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status} fra IIP API (${messageType})`);
+    const j = await r.json();
+    const recs = Array.isArray(j.data) ? j.data : [];
+    if (recs[0]) {
+        console.log(`[IIP] ${messageType}: ${recs.length} records, keys:`, Object.keys(recs[0]));
+        console.log(`[IIP] ${messageType} first record:`, recs[0]);
+    } else {
+        console.log(`[IIP] ${messageType}: 0 records`);
+    }
+    return recs.map(rec => ({ ...rec, _msgType: messageType }));
+}
+
+async function loadAndRenderUmm() {
+    const loadingEl = document.getElementById('ummLoading');
+    const errorEl   = document.getElementById('ummErrorBox');
+
+    loadingEl.classList.remove('hidden');
+    errorEl.style.display = 'none';
+
+    try {
+        const [wdRecs, injRecs] = await Promise.all([
+            fetchUmms('withdrawal'),
+            fetchUmms('injection'),
+        ]);
+
+        // Deduplicate by messageId (an active UMM could appear under both types)
+        const seen = new Set();
+        const all = [];
+        for (const rec of [...wdRecs, ...injRecs]) {
+            const key = rec.messageId || rec.message_id || JSON.stringify(rec);
+            if (!seen.has(key)) { seen.add(key); all.push(rec); }
+        }
+
+        // Unplanned first, then by eventStart descending
+        all.sort((a, b) => {
+            const unplanned = r => /unplanned/i.test(r.messageType || r.message_type || '');
+            if (unplanned(a) !== unplanned(b)) return unplanned(a) ? -1 : 1;
+            const aStart = a.eventStart || a.event_start || '';
+            const bStart = b.eventStart || b.event_start || '';
+            return bStart.localeCompare(aStart);
+        });
+
+        renderUmmStats(wdRecs.length, injRecs.length, all);
+        renderUmmTable(all);
+    } catch (err) {
+        errorEl.textContent = `Feil ved henting av UMM-data: ${err.message}`;
+        errorEl.style.display = 'block';
+        console.error(err);
+    } finally {
+        loadingEl.classList.add('hidden');
+    }
+}
+
+function renderUmmStats(wdCount, injCount, all) {
+    let totalUnavail = 0, hasCapacity = false;
+    for (const u of all) {
+        const v = parseFloat(u.unavailableCapacity ?? u.unavailable_capacity ?? NaN);
+        if (!isNaN(v)) { totalUnavail += v; hasCapacity = true; }
+    }
+
+    document.getElementById('ummStatsGrid').innerHTML = `
+        <div class="stat">
+            <div class="stat-label">Lagertrekk-varsler</div>
+            <div class="stat-value" style="color:#2dd4bf">${wdCount}</div>
+            <div class="stat-sub">aktive UMM-er</div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">Injeksjonsvarsler</div>
+            <div class="stat-value" style="color:#f97316">${injCount}</div>
+            <div class="stat-sub">aktive UMM-er</div>
+        </div>
+        ${hasCapacity ? `<div class="stat">
+            <div class="stat-label">Sum utilgjengelig kap.</div>
+            <div class="stat-value">${Math.round(totalUnavail)}</div>
+            <div class="stat-sub">GWh/d (alle varsler)</div>
+        </div>` : ''}
+    `;
+}
+
+function renderUmmTable(umms) {
+    const contentEl = document.getElementById('ummContent');
+    if (!umms.length) {
+        contentEl.innerHTML = `<div class="umm-empty">Ingen aktive kapasitetsvarsler funnet</div>`;
+        return;
+    }
+
+    const rows = umms.map(u => {
+        const msgCat   = (u._msgType || '').toLowerCase();
+        const msgType  = (u.messageType  || u.message_type  || '').toLowerCase();
+        const reporter = u.reportingEntityName || u.reporting_entity_name || u.name || '—';
+        const zone     = u.balancingZoneName   || u.balancing_zone_name   || u.country || '—';
+        const unavail  = u.unavailableCapacity ?? u.unavailable_capacity;
+        const avail    = u.availableCapacity   ?? u.available_capacity;
+        const normal   = u.normalCapacity      ?? u.normal_capacity;
+        const unit     = u.unit || 'GWh/d';
+        const start    = (u.eventStart || u.event_start || '').slice(0, 10);
+        const stop     = (u.eventStop  || u.event_stop  || '').slice(0, 10);
+        const remarks  = u.remarks || u.remark || '';
+
+        const dirBadge = msgCat === 'withdrawal'
+            ? `<span class="umm-badge badge-withdrawal">Lagertrekk</span>`
+            : `<span class="umm-badge badge-injection">Injeksjon</span>`;
+
+        const typeBadge = /unplanned/i.test(msgType)
+            ? `<span class="umm-badge badge-unplanned">Uplanlagt</span>`
+            : `<span class="umm-badge badge-planned">Planlagt</span>`;
+
+        let capStr = '—';
+        if (unavail != null && normal != null)
+            capStr = `<span class="umm-cap">${unavail}&thinsp;/&thinsp;${normal} <span class="umm-muted">${unit}</span></span>`;
+        else if (avail != null && normal != null)
+            capStr = `<span class="umm-cap">${avail}&thinsp;/&thinsp;${normal} <span class="umm-muted">${unit}</span></span>`;
+        else if (unavail != null)
+            capStr = `<span class="umm-cap">${unavail} <span class="umm-muted">${unit}</span></span>`;
+
+        const period = start
+            ? (stop && stop !== start ? `${start} – ${stop}` : start)
+            : '—';
+
+        return `<tr title="${remarks.replace(/"/g,'&quot;')}">
+            <td>${dirBadge}</td>
+            <td>${typeBadge}</td>
+            <td>${reporter}</td>
+            <td class="col-zone umm-muted">${zone}</td>
+            <td class="col-cap">${capStr}</td>
+            <td class="umm-muted" style="white-space:nowrap">${period}</td>
+        </tr>`;
+    }).join('');
+
+    contentEl.innerHTML = `
+        <table class="umm-table">
+            <thead>
+                <tr>
+                    <th>Type</th>
+                    <th>Hendelse</th>
+                    <th>Rapportør</th>
+                    <th class="col-zone">Balanseringssone</th>
+                    <th class="col-cap">Utilgj.&thinsp;/&thinsp;Normal kap.</th>
+                    <th>Periode</th>
+                </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+        </table>
+    `;
+}
+
+loadAndRenderUmm();
+</script>
+</body>
+</html>
