@@ -1,0 +1,49 @@
+name: Update gas storage data
+
+on:
+  schedule:
+    - cron: '7 2 * * *'   # 04:07 CEST (summer, UTC+2)
+    - cron: '7 3 * * *'   # 04:07 CET  (winter, UTC+1)
+  workflow_dispatch:         # allow manual trigger, always runs regardless of time
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Check local time (only proceed at 04:xx Europe/Oslo on scheduled runs)
+        id: check
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            HOUR=$(TZ=Europe/Oslo date +%H)
+            if [ "$HOUR" = "04" ]; then
+              echo "run=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "Local hour is $HOUR, not 04 — skipping (the other cron trigger handles this half of the year)."
+              echo "run=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Fetch AGSI + ALSI data
+        if: steps.check.outputs.run == 'true'
+        run: python3 scripts/fetch-gas-data.py
+
+      - name: Commit if changed
+        if: steps.check.outputs.run == 'true'
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/agsi.json data/alsi.json
+          git diff --staged --quiet \
+            || git commit -m "chore: update gas storage data [skip ci]" \
+            && git push
