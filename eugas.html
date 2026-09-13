@@ -240,6 +240,22 @@ const DAY_KEYS = (() => {
     return keys;
 })();
 
+// Bridges isolated single-day gaps (currently: Feb 29 in non-leap years, which
+// simply has no calendar date to report — not a real data outage) by linear
+// interpolation between its immediate neighbors. A real multi-day outage
+// leaves at least one interior point with a null neighbor, so it is left
+// alone and still renders as a visible break (spanGaps stays false for
+// current-year lines).
+function fillSingleDayGaps(arr) {
+    const out = arr.slice();
+    for (let i = 1; i < out.length - 1; i++) {
+        if (out[i] == null && out[i-1] != null && out[i+1] != null) {
+            out[i] = (out[i-1] + out[i+1]) / 2;
+        }
+    }
+    return out;
+}
+
 const SELECTIONS = {
     eu: { label: 'Europa (total)' },
     de: { label: 'Tyskland' },
@@ -297,7 +313,7 @@ async function loadAndRender(selKey) {
         const curMap   = fetchYear(selKey, CUR_YEAR);
         const histMaps = HIST_YEARS.map(y => fetchYear(selKey, y));
 
-        const curData = DAY_KEYS.map(k => curMap[k] ?? null);
+        const curData = fillSingleDayGaps(DAY_KEYS.map(k => curMap[k] ?? null));
         // Feb 29 only has data in leap years (1 of 5), so a plain min/max there
         // would be a single-sample "band" that collapses to a spike. Require a
         // majority of years before trusting the range; otherwise leave it null
