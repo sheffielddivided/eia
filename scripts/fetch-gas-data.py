@@ -64,12 +64,26 @@ def fetch_json(base_url, params, attempt=0):
 
 
 def fetch_year_records(base_url, sel, year):
+    """Fetch all records for a year, paginating as needed.
+
+    The API caps each page at 300 records regardless of the requested
+    'size', and paginates via 'page' (1-indexed) with 'last_page' in the
+    response telling us how many pages exist in total.
+    """
     from_ = f'{year}-01-01'
     to = date.today().isoformat() if year == CUR_YEAR else f'{year}-12-31'
-    params = {'from': from_, 'to': to, 'size': '400'}
-    params.update(sel)
-    j = fetch_json(base_url, params)
-    return j.get('data') or []
+    all_records = []
+    page = 1
+    while True:
+        params = {'from': from_, 'to': to, 'size': '300', 'page': str(page)}
+        params.update(sel)
+        j = fetch_json(base_url, params)
+        all_records.extend(j.get('data') or [])
+        last_page = j.get('last_page', 1)
+        if page >= last_page:
+            break
+        page += 1
+    return all_records
 
 
 def day_map(records, field_candidates):
