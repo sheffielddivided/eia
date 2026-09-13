@@ -298,13 +298,18 @@ async function loadAndRender(selKey) {
         const histMaps = HIST_YEARS.map(y => fetchYear(selKey, y));
 
         const curData = DAY_KEYS.map(k => curMap[k] ?? null);
+        // Feb 29 only has data in leap years (1 of 5), so a plain min/max there
+        // would be a single-sample "band" that collapses to a spike. Require a
+        // majority of years before trusting the range; otherwise leave it null
+        // so spanGaps bridges smoothly over that one day.
+        const minSamples = Math.ceil(HIST_YEARS.length / 2);
         const minData = DAY_KEYS.map(k => {
             const vals = histMaps.map(m => m[k]).filter(v => v != null);
-            return vals.length ? Math.min(...vals) : null;
+            return vals.length >= minSamples ? Math.min(...vals) : null;
         });
         const maxData = DAY_KEYS.map(k => {
             const vals = histMaps.map(m => m[k]).filter(v => v != null);
-            return vals.length ? Math.max(...vals) : null;
+            return vals.length >= minSamples ? Math.max(...vals) : null;
         });
 
         const now      = new Date();
