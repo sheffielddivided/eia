@@ -980,9 +980,12 @@ function renderSupplyChart(wdCur, injCur, lngCur, wdAvg, injAvg, lngAvg, todayId
 }
 
 function renderSupplyStats(wdCur, injCur, lngCur, wdAvg, injAvg, lngAvg) {
+    // Require all three series present so the row reports one consistent date
+    // instead of showing "—" for whichever series' rolling average happens to
+    // not yet reach as far as the others' at the trailing edge.
     let latestIdx = -1;
     for (let i = wdCur.length - 1; i >= 0; i--) {
-        if (wdCur[i] != null || injCur[i] != null || lngCur[i] != null) { latestIdx = i; break; }
+        if (wdCur[i] != null && injCur[i] != null && lngCur[i] != null) { latestIdx = i; break; }
     }
     if (latestIdx < 0) return;
 
