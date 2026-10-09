@@ -2,9 +2,10 @@ name: Update gas storage data
 
 on:
   schedule:
-    - cron: '7 2 * * *'   # 04:07 CEST (summer, UTC+2)
-    - cron: '7 3 * * *'   # 04:07 CET  (winter, UTC+1)
-  workflow_dispatch:         # allow manual trigger, always runs regardless of time
+    - cron: '7 2 * * *'   # target ~04:07 Europe/Oslo; GitHub's scheduler can delay
+                           # this by hours, so the job itself (not this time) is what
+                           # guarantees it only actually fetches once per UTC day
+  workflow_dispatch:         # manual trigger always runs, regardless of today's state
 
 permissions:
   contents: write
@@ -19,18 +20,27 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Check local time (only proceed at 04:xx Europe/Oslo on scheduled runs)
+      - name: Skip if already updated today (scheduled runs only)
         id: check
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "Manual run — proceeding regardless of last update."
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
-            HOUR=$(TZ=Europe/Oslo date +%H)
-            if [ "$HOUR" = "04" ]; then
-              echo "run=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "Local hour is $HOUR, not 04 — skipping (the other cron trigger handles this half of the year)."
+            TODAY=$(date -u +%F)
+            LAST=$(python3 -c "
+import json
+try:
+    print(json.load(open('data/agsi.json'))['updatedAt'][:10])
+except Exception:
+    print('')
+")
+            if [ "$LAST" = "$TODAY" ]; then
+              echo "Already updated today ($TODAY) — skipping."
               echo "run=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "Last update: ${LAST:-none}, today: $TODAY — proceeding."
+              echo "run=true" >> "$GITHUB_OUTPUT"
             fi
           fi
 
