@@ -28,13 +28,7 @@ jobs:
             echo "run=true" >> "$GITHUB_OUTPUT"
           else
             TODAY=$(date -u +%F)
-            LAST=$(python3 -c "
-import json
-try:
-    print(json.load(open('data/agsi.json'))['updatedAt'][:10])
-except Exception:
-    print('')
-")
+            LAST=$(python3 -c "import json; print(json.load(open('data/agsi.json')).get('updatedAt','')[:10])" 2>/dev/null || true)
             if [ "$LAST" = "$TODAY" ]; then
               echo "Already updated today ($TODAY) — skipping."
               echo "run=false" >> "$GITHUB_OUTPUT"
