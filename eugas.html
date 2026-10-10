@@ -216,9 +216,27 @@
     <div class="stats-grid" id="supplyStatsGrid"></div>
 </div>
 
+<h2 class="section-heading">
+    TTF gasspris – dagsreferanse
+    <span>EUR/MWh &middot; 7-dagers glidende snitt &middot; kilde: EEX</span>
+</h2>
+
+<div class="card">
+    <div class="chart-wrapper">
+        <canvas id="ttfChart"></canvas>
+        <div class="loading-overlay" id="ttfLoading">
+            <div class="spinner"></div>
+            Laster data&hellip;
+        </div>
+    </div>
+    <div class="error-box" id="ttfErrorBox"></div>
+    <div class="stats-grid" id="ttfStatsGrid"></div>
+</div>
+
 <footer>
-    Kilde: <a href="https://agsi.gie.eu" target="_blank" rel="noopener">AGSI+</a> (gasslager, injeksjon og lagertrekk) og
-    <a href="https://alsi.gie.eu" target="_blank" rel="noopener">ALSI+</a> (LNG-terminaler og import) / Gas Infrastructure Europe.
+    Kilde: <a href="https://agsi.gie.eu" target="_blank" rel="noopener">AGSI+</a> (gasslager, injeksjon og lagertrekk),
+    <a href="https://alsi.gie.eu" target="_blank" rel="noopener">ALSI+</a> (LNG-terminaler og import) og
+    <a href="https://www.eex.com" target="_blank" rel="noopener">EEX</a> (TTF dagsreferansepris) / Gas Infrastructure Europe.
     Data hentes én gang i døgnet kl. 04:07 (norsk tid) og lastes statisk &mdash; ingen direkte API-kall fra nettleseren.
 </footer>
 
@@ -273,19 +291,23 @@ const LNG_SELECTIONS = {
 };
 
 // ── Static data, pre-fetched once daily by .github/workflows/update-gas-data.yml
-// (scripts/fetch-gas-data.py) and committed as data/agsi.json + data/alsi.json.
-// The page reads these same-origin JSON files instead of calling the AGSI/ALSI
-// APIs live on every page load — much faster and avoids API overuse.
+// (scripts/fetch-gas-data.py + scripts/fetch-ttf-price.py) and committed as
+// data/agsi.json, data/alsi.json, data/ttf_price.json. The page reads these
+// same-origin JSON files instead of calling live APIs on every page load —
+// much faster and avoids API overuse.
 let AGSI_DATA = null;
 let ALSI_DATA = null;
+let TTF_DATA  = null;
 
 async function loadStaticData() {
-    const [agsi, alsi] = await Promise.all([
+    const [agsi, alsi, ttf] = await Promise.all([
         fetch('data/agsi.json').then(r => { if (!r.ok) throw new Error(`HTTP ${r.status} fra data/agsi.json`); return r.json(); }),
         fetch('data/alsi.json').then(r => { if (!r.ok) throw new Error(`HTTP ${r.status} fra data/alsi.json`); return r.json(); }),
+        fetch('data/ttf_price.json').then(r => { if (!r.ok) throw new Error(`HTTP ${r.status} fra data/ttf_price.json`); return r.json(); }),
     ]);
     AGSI_DATA = agsi;
     ALSI_DATA = alsi;
+    TTF_DATA  = ttf;
 
     const updatedAt = agsi.updatedAt || alsi.updatedAt;
     if (updatedAt) {
@@ -1015,11 +1037,184 @@ function renderSupplyStats(wdCur, injCur, lngCur, wdAvg, injAvg, lngAvg) {
     `;
 }
 
+// ── TTF day-ahead reference price (EEX) ──────────────────────────────────────
+// Source CSV only exposes the most recent 60 days; the fetch script
+// accumulates it into data/ttf_price.json so the archive grows over time.
+
+let ttfChartInstance = null;
+
+async function loadAndRenderTtf() {
+    const loadingEl = document.getElementById('ttfLoading');
+    const errorEl   = document.getElementById('ttfErrorBox');
+    const statsEl   = document.getElementById('ttfStatsGrid');
+
+    loadingEl.classList.remove('hidden');
+    errorEl.style.display = 'none';
+    statsEl.innerHTML = '';
+
+    try {
+        const prices = TTF_DATA.prices || {};
+        const dates  = Object.keys(prices).sort();
+        const raw    = dates.map(d => prices[d]);
+        const smooth = rollingAvg(raw, 7);
+
+        const todayKey = new Date().toISOString().slice(0, 10);
+        const todayIdx = dates.indexOf(todayKey);
+
+        renderTtfChart(dates, raw, smooth, todayIdx);
+        renderTtfStats(dates, raw, smooth);
+    } catch (err) {
+        errorEl.textContent = `Feil ved visning av TTF-pris: ${err.message}`;
+        errorEl.style.display = 'block';
+        console.error(err);
+    } finally {
+        loadingEl.classList.add('hidden');
+    }
+}
+
+function renderTtfChart(dates, raw, smooth, todayIdx) {
+    const ctx = document.getElementById('ttfChart').getContext('2d');
+    if (ttfChartInstance) ttfChartInstance.destroy();
+
+    const xLabels = dates.map(d => d.endsWith('-01') ? MONTHS[parseInt(d.slice(5,7), 10)-1] : '');
+
+    ttfChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: xLabels,
+            datasets: [
+                {
+                    label: 'Daglig pris',
+                    data: raw,
+                    borderColor: 'rgba(167,139,250,0.35)',
+                    backgroundColor: 'transparent',
+                    pointRadius: 0,
+                    borderWidth: 1,
+                    fill: false,
+                    tension: 0.2,
+                    spanGaps: false,
+                    order: 2,
+                },
+                {
+                    label: '7-dagers snitt',
+                    data: smooth,
+                    borderColor: '#a78bfa',
+                    backgroundColor: 'rgba(167,139,250,0.15)',
+                    pointRadius: 0,
+                    borderWidth: 2.5,
+                    fill: 'origin',
+                    tension: 0.3,
+                    spanGaps: true,
+                    order: 1,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: {
+                    display: true,
+                    labels: {
+                        color: '#8b949e',
+                        boxWidth: 14, boxHeight: 14, padding: 16,
+                        font: { size: 12 },
+                    },
+                },
+                tooltip: {
+                    backgroundColor: '#1c2129',
+                    borderColor: '#30363d',
+                    borderWidth: 1,
+                    titleColor: '#8b949e',
+                    bodyColor: '#c9d1d9',
+                    callbacks: {
+                        title: items => dates[items[0].dataIndex] || '',
+                        label: item => {
+                            if (item.raw == null) return null;
+                            return `  ${item.dataset.label}: ${item.raw.toFixed(2)} EUR/MWh`;
+                        },
+                    },
+                },
+                annotation: {
+                    annotations: todayIdx >= 0 ? {
+                        todayLine: {
+                            type: 'line',
+                            xMin: todayIdx, xMax: todayIdx,
+                            borderColor: 'rgba(200,200,200,0.3)',
+                            borderWidth: 1, borderDash: [4, 4],
+                            label: {
+                                display: true, content: 'I dag', color: '#8b949e',
+                                font: { size: 10 }, position: 'start',
+                                backgroundColor: 'transparent', padding: 2,
+                            },
+                        },
+                    } : {},
+                },
+            },
+            scales: {
+                x: {
+                    grid: { color: '#21262d', tickLength: 0 },
+                    ticks: {
+                        color: '#8b949e', font: { size: 11 },
+                        maxRotation: 0, autoSkip: false,
+                        callback: (_, idx) => xLabels[idx] || null,
+                    },
+                },
+                y: {
+                    grid: { color: '#21262d' },
+                    ticks: {
+                        color: '#8b949e', font: { size: 11 },
+                        callback: v => v.toFixed(0),
+                    },
+                    title: {
+                        display: true, text: 'EUR/MWh',
+                        color: '#8b949e', font: { size: 11 },
+                    },
+                },
+            },
+        },
+    });
+}
+
+function renderTtfStats(dates, raw, smooth) {
+    const n = dates.length;
+    if (n === 0) return;
+
+    const latestPrice  = raw[n-1];
+    const latestDate   = dates[n-1];
+    const latestSmooth = smooth[n-1];
+
+    const last30Raw = raw.slice(Math.max(0, n-30));
+    const min30 = Math.min(...last30Raw);
+    const max30 = Math.max(...last30Raw);
+
+    document.getElementById('ttfStatsGrid').innerHTML = `
+        <div class="stat">
+            <div class="stat-label">Siste pris (${latestDate})</div>
+            <div class="stat-value" style="color:#a78bfa">${latestPrice.toFixed(2)} <small style="font-size:.8rem;font-weight:400">EUR/MWh</small></div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">7-dagers snitt</div>
+            <div class="stat-value">${latestSmooth != null ? latestSmooth.toFixed(2) : '—'} <small style="font-size:.8rem;font-weight:400">EUR/MWh</small></div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">30-dagers min</div>
+            <div class="stat-value">${min30.toFixed(2)} <small style="font-size:.8rem;font-weight:400">EUR/MWh</small></div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">30-dagers maks</div>
+            <div class="stat-value">${max30.toFixed(2)} <small style="font-size:.8rem;font-weight:400">EUR/MWh</small></div>
+        </div>
+    `;
+}
+
 loadStaticData()
     .then(() => {
         loadAndRender('eu');
         loadAndRenderLng('eu');
         loadAndRenderSupply();
+        loadAndRenderTtf();
     })
     .catch(err => {
         console.error('Kunne ikke laste statiske data:', err);
