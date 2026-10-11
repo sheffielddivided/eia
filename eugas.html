@@ -1061,7 +1061,6 @@ async function loadAndRenderTtf() {
         const futures = TTF_FUTURES_DATA.prices || {};
         const dates   = Object.keys(prices).sort();
         const raw     = dates.map(d => prices[d]);
-        const smooth  = rollingAvg(raw, 7);
         // Overlay futures over the same date window as the spot archive.
         // Futures has no value on weekends/holidays (market closed) — left
         // null, bridged visually by spanGaps on that dataset.
@@ -1070,8 +1069,8 @@ async function loadAndRenderTtf() {
         const todayKey = new Date().toISOString().slice(0, 10);
         const todayIdx = dates.indexOf(todayKey);
 
-        renderTtfChart(dates, raw, smooth, futuresRaw, todayIdx);
-        renderTtfStats(dates, raw, smooth, futures);
+        renderTtfChart(dates, raw, futuresRaw, todayIdx);
+        renderTtfStats(dates, raw, futures);
     } catch (err) {
         errorEl.textContent = `Feil ved visning av TTF-pris: ${err.message}`;
         errorEl.style.display = 'block';
@@ -1081,7 +1080,7 @@ async function loadAndRenderTtf() {
     }
 }
 
-function renderTtfChart(dates, raw, smooth, futuresRaw, todayIdx) {
+function renderTtfChart(dates, raw, futuresRaw, todayIdx) {
     const ctx = document.getElementById('ttfChart').getContext('2d');
     if (ttfChartInstance) ttfChartInstance.destroy();
 
@@ -1093,27 +1092,15 @@ function renderTtfChart(dates, raw, smooth, futuresRaw, todayIdx) {
             labels: xLabels,
             datasets: [
                 {
-                    label: 'Daglig spotpris',
+                    label: 'Spotpris (EEX)',
                     data: raw,
-                    borderColor: 'rgba(167,139,250,0.35)',
-                    backgroundColor: 'transparent',
-                    pointRadius: 0,
-                    borderWidth: 1,
-                    fill: false,
-                    tension: 0.2,
-                    spanGaps: false,
-                    order: 3,
-                },
-                {
-                    label: 'Spot, 7-dagers snitt',
-                    data: smooth,
                     borderColor: '#a78bfa',
                     backgroundColor: 'rgba(167,139,250,0.15)',
                     pointRadius: 0,
                     borderWidth: 2.5,
                     fill: 'origin',
-                    tension: 0.3,
-                    spanGaps: true,
+                    tension: 0.2,
+                    spanGaps: false,
                     order: 2,
                 },
                 {
@@ -1198,13 +1185,12 @@ function renderTtfChart(dates, raw, smooth, futuresRaw, todayIdx) {
     });
 }
 
-function renderTtfStats(dates, raw, smooth, futures) {
+function renderTtfStats(dates, raw, futures) {
     const n = dates.length;
     if (n === 0) return;
 
     const latestPrice  = raw[n-1];
     const latestDate   = dates[n-1];
-    const latestSmooth = smooth[n-1];
 
     const last30Raw = raw.slice(Math.max(0, n-30));
     const min30 = Math.min(...last30Raw);
@@ -1221,10 +1207,6 @@ function renderTtfStats(dates, raw, smooth, futures) {
         <div class="stat">
             <div class="stat-label">Spotpris (${latestDate})</div>
             <div class="stat-value" style="color:#a78bfa">${latestPrice.toFixed(2)} <small style="font-size:.8rem;font-weight:400">EUR/MWh</small></div>
-        </div>
-        <div class="stat">
-            <div class="stat-label">7-dagers snitt (spot)</div>
-            <div class="stat-value">${latestSmooth != null ? latestSmooth.toFixed(2) : '—'} <small style="font-size:.8rem;font-weight:400">EUR/MWh</small></div>
         </div>
         <div class="stat">
             <div class="stat-label">Front-month${latestFuturesDate ? ` (${latestFuturesDate})` : ''}</div>
