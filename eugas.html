@@ -217,8 +217,8 @@
 </div>
 
 <h2 class="section-heading">
-    TTF gasspris – dagsreferanse
-    <span>EUR/MWh &middot; 7-dagers glidende snitt &middot; kilde: EEX</span>
+    TTF gasspris – dagsreferanse og front-month
+    <span>EUR/MWh &middot; spotpris (EEX) og front-month futures (Yahoo Finance, TTF=F)</span>
 </h2>
 
 <div class="card">
@@ -235,8 +235,9 @@
 
 <footer>
     Kilde: <a href="https://agsi.gie.eu" target="_blank" rel="noopener">AGSI+</a> (gasslager, injeksjon og lagertrekk),
-    <a href="https://alsi.gie.eu" target="_blank" rel="noopener">ALSI+</a> (LNG-terminaler og import) og
-    <a href="https://www.eex.com" target="_blank" rel="noopener">EEX</a> (TTF dagsreferansepris) / Gas Infrastructure Europe.
+    <a href="https://alsi.gie.eu" target="_blank" rel="noopener">ALSI+</a> (LNG-terminaler og import),
+    <a href="https://www.eex.com" target="_blank" rel="noopener">EEX</a> (TTF dagsreferansepris) og
+    <a href="https://finance.yahoo.com/quote/TTF=F/" target="_blank" rel="noopener">Yahoo Finance</a> (TTF front-month futures) / Gas Infrastructure Europe.
     Data hentes én gang i døgnet kl. 04:07 (norsk tid) og lastes statisk &mdash; ingen direkte API-kall fra nettleseren.
 </footer>
 
@@ -291,23 +292,26 @@ const LNG_SELECTIONS = {
 };
 
 // ── Static data, pre-fetched once daily by .github/workflows/update-gas-data.yml
-// (scripts/fetch-gas-data.py + scripts/fetch-ttf-price.py) and committed as
-// data/agsi.json, data/alsi.json, data/ttf_price.json. The page reads these
-// same-origin JSON files instead of calling live APIs on every page load —
-// much faster and avoids API overuse.
+// (scripts/fetch-gas-data.py + scripts/fetch-ttf-price.py + scripts/fetch-ttf-futures.py)
+// and committed as data/agsi.json, data/alsi.json, data/ttf_price.json,
+// data/ttf_futures.json. The page reads these same-origin JSON files instead
+// of calling live APIs on every page load — much faster and avoids API overuse.
 let AGSI_DATA = null;
 let ALSI_DATA = null;
 let TTF_DATA  = null;
+let TTF_FUTURES_DATA = null;
 
 async function loadStaticData() {
-    const [agsi, alsi, ttf] = await Promise.all([
+    const [agsi, alsi, ttf, ttfFutures] = await Promise.all([
         fetch('data/agsi.json').then(r => { if (!r.ok) throw new Error(`HTTP ${r.status} fra data/agsi.json`); return r.json(); }),
         fetch('data/alsi.json').then(r => { if (!r.ok) throw new Error(`HTTP ${r.status} fra data/alsi.json`); return r.json(); }),
         fetch('data/ttf_price.json').then(r => { if (!r.ok) throw new Error(`HTTP ${r.status} fra data/ttf_price.json`); return r.json(); }),
+        fetch('data/ttf_futures.json').then(r => { if (!r.ok) throw new Error(`HTTP ${r.status} fra data/ttf_futures.json`); return r.json(); }),
     ]);
     AGSI_DATA = agsi;
     ALSI_DATA = alsi;
     TTF_DATA  = ttf;
+    TTF_FUTURES_DATA = ttfFutures;
 
     const updatedAt = agsi.updatedAt || alsi.updatedAt;
     if (updatedAt) {
@@ -1053,16 +1057,21 @@ async function loadAndRenderTtf() {
     statsEl.innerHTML = '';
 
     try {
-        const prices = TTF_DATA.prices || {};
-        const dates  = Object.keys(prices).sort();
-        const raw    = dates.map(d => prices[d]);
-        const smooth = rollingAvg(raw, 7);
+        const prices  = TTF_DATA.prices || {};
+        const futures = TTF_FUTURES_DATA.prices || {};
+        const dates   = Object.keys(prices).sort();
+        const raw     = dates.map(d => prices[d]);
+        const smooth  = rollingAvg(raw, 7);
+        // Overlay futures over the same date window as the spot archive.
+        // Futures has no value on weekends/holidays (market closed) — left
+        // null, bridged visually by spanGaps on that dataset.
+        const futuresRaw = dates.map(d => futures[d] ?? null);
 
         const todayKey = new Date().toISOString().slice(0, 10);
         const todayIdx = dates.indexOf(todayKey);
 
-        renderTtfChart(dates, raw, smooth, todayIdx);
-        renderTtfStats(dates, raw, smooth);
+        renderTtfChart(dates, raw, smooth, futuresRaw, todayIdx);
+        renderTtfStats(dates, raw, smooth, futures);
     } catch (err) {
         errorEl.textContent = `Feil ved visning av TTF-pris: ${err.message}`;
         errorEl.style.display = 'block';
@@ -1072,7 +1081,7 @@ async function loadAndRenderTtf() {
     }
 }
 
-function renderTtfChart(dates, raw, smooth, todayIdx) {
+function renderTtfChart(dates, raw, smooth, futuresRaw, todayIdx) {
     const ctx = document.getElementById('ttfChart').getContext('2d');
     if (ttfChartInstance) ttfChartInstance.destroy();
 
@@ -1084,7 +1093,7 @@ function renderTtfChart(dates, raw, smooth, todayIdx) {
             labels: xLabels,
             datasets: [
                 {
-                    label: 'Daglig pris',
+                    label: 'Daglig spotpris',
                     data: raw,
                     borderColor: 'rgba(167,139,250,0.35)',
                     backgroundColor: 'transparent',
@@ -1093,10 +1102,10 @@ function renderTtfChart(dates, raw, smooth, todayIdx) {
                     fill: false,
                     tension: 0.2,
                     spanGaps: false,
-                    order: 2,
+                    order: 3,
                 },
                 {
-                    label: '7-dagers snitt',
+                    label: 'Spot, 7-dagers snitt',
                     data: smooth,
                     borderColor: '#a78bfa',
                     backgroundColor: 'rgba(167,139,250,0.15)',
@@ -1104,6 +1113,18 @@ function renderTtfChart(dates, raw, smooth, todayIdx) {
                     borderWidth: 2.5,
                     fill: 'origin',
                     tension: 0.3,
+                    spanGaps: true,
+                    order: 2,
+                },
+                {
+                    label: 'Front-month futures (TTF=F)',
+                    data: futuresRaw,
+                    borderColor: '#22d3ee',
+                    backgroundColor: 'transparent',
+                    pointRadius: 0,
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.2,
                     spanGaps: true,
                     order: 1,
                 },
@@ -1177,7 +1198,7 @@ function renderTtfChart(dates, raw, smooth, todayIdx) {
     });
 }
 
-function renderTtfStats(dates, raw, smooth) {
+function renderTtfStats(dates, raw, smooth, futures) {
     const n = dates.length;
     if (n === 0) return;
 
@@ -1189,21 +1210,36 @@ function renderTtfStats(dates, raw, smooth) {
     const min30 = Math.min(...last30Raw);
     const max30 = Math.max(...last30Raw);
 
+    // Futures trades on weekdays only, so its own latest date can differ
+    // from the spot archive's latest date — look it up independently.
+    const futuresDates = Object.keys(futures).sort();
+    const latestFuturesDate  = futuresDates[futuresDates.length - 1];
+    const latestFuturesPrice = latestFuturesDate != null ? futures[latestFuturesDate] : null;
+    const spread = latestFuturesPrice != null ? latestPrice - latestFuturesPrice : null;
+
     document.getElementById('ttfStatsGrid').innerHTML = `
         <div class="stat">
-            <div class="stat-label">Siste pris (${latestDate})</div>
+            <div class="stat-label">Spotpris (${latestDate})</div>
             <div class="stat-value" style="color:#a78bfa">${latestPrice.toFixed(2)} <small style="font-size:.8rem;font-weight:400">EUR/MWh</small></div>
         </div>
         <div class="stat">
-            <div class="stat-label">7-dagers snitt</div>
+            <div class="stat-label">7-dagers snitt (spot)</div>
             <div class="stat-value">${latestSmooth != null ? latestSmooth.toFixed(2) : '—'} <small style="font-size:.8rem;font-weight:400">EUR/MWh</small></div>
         </div>
         <div class="stat">
-            <div class="stat-label">30-dagers min</div>
+            <div class="stat-label">Front-month${latestFuturesDate ? ` (${latestFuturesDate})` : ''}</div>
+            <div class="stat-value" style="color:#22d3ee">${latestFuturesPrice != null ? latestFuturesPrice.toFixed(2) : '—'} <small style="font-size:.8rem;font-weight:400">EUR/MWh</small></div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">Spread (spot − front-month)</div>
+            <div class="stat-value">${spread != null ? (spread >= 0 ? '+' : '') + spread.toFixed(2) : '—'} <small style="font-size:.8rem;font-weight:400">EUR/MWh</small></div>
+        </div>
+        <div class="stat">
+            <div class="stat-label">30-dagers min (spot)</div>
             <div class="stat-value">${min30.toFixed(2)} <small style="font-size:.8rem;font-weight:400">EUR/MWh</small></div>
         </div>
         <div class="stat">
-            <div class="stat-label">30-dagers maks</div>
+            <div class="stat-label">30-dagers maks (spot)</div>
             <div class="stat-value">${max30.toFixed(2)} <small style="font-size:.8rem;font-weight:400">EUR/MWh</small></div>
         </div>
     `;
