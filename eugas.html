@@ -221,6 +221,13 @@
     <span>EUR/MWh &middot; spotpris (EEX) og front-month futures (Yahoo Finance, TTF=F)</span>
 </h2>
 
+<div class="controls" id="ttf-controls">
+    <button class="btn" data-days="60">60 dager</button>
+    <button class="btn" data-days="180">6 måneder</button>
+    <button class="btn active" data-days="365">1 år</button>
+    <button class="btn" data-days="0">Alt</button>
+</div>
+
 <div class="card">
     <div class="chart-wrapper">
         <canvas id="ttfChart"></canvas>
@@ -1047,7 +1054,15 @@ function renderSupplyStats(wdCur, injCur, lngCur, wdAvg, injAvg, lngAvg) {
 
 let ttfChartInstance = null;
 
-async function loadAndRenderTtf() {
+function ttfHorizonLabel(days) {
+    if (!days) return 'hele arkivet';
+    if (days === 60)  return '60 dager';
+    if (days === 180) return '6 måneder';
+    if (days === 365) return '1 år';
+    return `${days} dager`;
+}
+
+async function loadAndRenderTtf(horizonDays) {
     const loadingEl = document.getElementById('ttfLoading');
     const errorEl   = document.getElementById('ttfErrorBox');
     const statsEl   = document.getElementById('ttfStatsGrid');
@@ -1059,9 +1074,21 @@ async function loadAndRenderTtf() {
     try {
         const prices  = TTF_DATA.prices || {};
         const futures = TTF_FUTURES_DATA.prices || {};
-        const dates   = Object.keys(prices).sort();
-        const raw     = dates.map(d => prices[d]);
-        // Overlay futures over the same date window as the spot archive.
+
+        // Combine both series' dates so the chart can show as far back as the
+        // futures archive goes (currently ~2 years), even where the spot
+        // archive (shorter, growing by one day per night) has no data yet.
+        const allDates = new Set([...Object.keys(prices), ...Object.keys(futures)]);
+        let dates = [...allDates].sort();
+
+        if (horizonDays) {
+            const cutoff = new Date();
+            cutoff.setDate(cutoff.getDate() - horizonDays);
+            const cutoffStr = cutoff.toISOString().slice(0, 10);
+            dates = dates.filter(d => d >= cutoffStr);
+        }
+
+        const raw = dates.map(d => prices[d] ?? null);
         // Futures has no value on weekends/holidays (market closed) — left
         // null, bridged visually by spanGaps on that dataset.
         const futuresRaw = dates.map(d => futures[d] ?? null);
@@ -1070,7 +1097,7 @@ async function loadAndRenderTtf() {
         const todayIdx = dates.indexOf(todayKey);
 
         renderTtfChart(dates, raw, futuresRaw, todayIdx);
-        renderTtfStats(dates, raw, futures);
+        renderTtfStats(dates, raw, futures, horizonDays);
     } catch (err) {
         errorEl.textContent = `Feil ved visning av TTF-pris: ${err.message}`;
         errorEl.style.display = 'block';
@@ -1185,28 +1212,35 @@ function renderTtfChart(dates, raw, futuresRaw, todayIdx) {
     });
 }
 
-function renderTtfStats(dates, raw, futures) {
+function renderTtfStats(dates, raw, futures, horizonDays) {
     const n = dates.length;
     if (n === 0) return;
 
-    const latestPrice  = raw[n-1];
-    const latestDate   = dates[n-1];
+    // Walk backward for the latest non-null spot value — the combined date
+    // axis's last entry can be a day spot hasn't published yet.
+    let latestIdx = -1;
+    for (let i = n - 1; i >= 0; i--) {
+        if (raw[i] != null) { latestIdx = i; break; }
+    }
+    const latestPrice = latestIdx >= 0 ? raw[latestIdx] : null;
+    const latestDate  = latestIdx >= 0 ? dates[latestIdx] : null;
 
-    const last30Raw = raw.slice(Math.max(0, n-30));
-    const min30 = Math.min(...last30Raw);
-    const max30 = Math.max(...last30Raw);
+    const visibleRaw = raw.filter(v => v != null);
+    const minV = visibleRaw.length ? Math.min(...visibleRaw) : null;
+    const maxV = visibleRaw.length ? Math.max(...visibleRaw) : null;
+    const rangeLabel = ttfHorizonLabel(horizonDays);
 
     // Futures trades on weekdays only, so its own latest date can differ
     // from the spot archive's latest date — look it up independently.
     const futuresDates = Object.keys(futures).sort();
     const latestFuturesDate  = futuresDates[futuresDates.length - 1];
     const latestFuturesPrice = latestFuturesDate != null ? futures[latestFuturesDate] : null;
-    const spread = latestFuturesPrice != null ? latestPrice - latestFuturesPrice : null;
+    const spread = (latestPrice != null && latestFuturesPrice != null) ? latestPrice - latestFuturesPrice : null;
 
     document.getElementById('ttfStatsGrid').innerHTML = `
         <div class="stat">
-            <div class="stat-label">Spotpris (${latestDate})</div>
-            <div class="stat-value" style="color:#a78bfa">${latestPrice.toFixed(2)} <small style="font-size:.8rem;font-weight:400">EUR/MWh</small></div>
+            <div class="stat-label">Spotpris${latestDate ? ` (${latestDate})` : ''}</div>
+            <div class="stat-value" style="color:#a78bfa">${latestPrice != null ? latestPrice.toFixed(2) : '—'} <small style="font-size:.8rem;font-weight:400">EUR/MWh</small></div>
         </div>
         <div class="stat">
             <div class="stat-label">Front-month${latestFuturesDate ? ` (${latestFuturesDate})` : ''}</div>
@@ -1217,22 +1251,30 @@ function renderTtfStats(dates, raw, futures) {
             <div class="stat-value">${spread != null ? (spread >= 0 ? '+' : '') + spread.toFixed(2) : '—'} <small style="font-size:.8rem;font-weight:400">EUR/MWh</small></div>
         </div>
         <div class="stat">
-            <div class="stat-label">30-dagers min (spot)</div>
-            <div class="stat-value">${min30.toFixed(2)} <small style="font-size:.8rem;font-weight:400">EUR/MWh</small></div>
+            <div class="stat-label">Min, spot (${rangeLabel})</div>
+            <div class="stat-value">${minV != null ? minV.toFixed(2) : '—'} <small style="font-size:.8rem;font-weight:400">EUR/MWh</small></div>
         </div>
         <div class="stat">
-            <div class="stat-label">30-dagers maks (spot)</div>
-            <div class="stat-value">${max30.toFixed(2)} <small style="font-size:.8rem;font-weight:400">EUR/MWh</small></div>
+            <div class="stat-label">Maks, spot (${rangeLabel})</div>
+            <div class="stat-value">${maxV != null ? maxV.toFixed(2) : '—'} <small style="font-size:.8rem;font-weight:400">EUR/MWh</small></div>
         </div>
     `;
 }
+
+document.getElementById('ttf-controls').addEventListener('click', e => {
+    const btn = e.target.closest('.btn[data-days]');
+    if (!btn) return;
+    document.querySelectorAll('#ttf-controls .btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadAndRenderTtf(parseInt(btn.dataset.days, 10) || 0);
+});
 
 loadStaticData()
     .then(() => {
         loadAndRender('eu');
         loadAndRenderLng('eu');
         loadAndRenderSupply();
-        loadAndRenderTtf();
+        loadAndRenderTtf(365);
     })
     .catch(err => {
         console.error('Kunne ikke laste statiske data:', err);
