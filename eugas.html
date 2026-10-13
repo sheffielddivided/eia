@@ -322,8 +322,18 @@ async function loadStaticData() {
 
     const updatedAt = agsi.updatedAt || alsi.updatedAt;
     if (updatedAt) {
-        const str = new Date(updatedAt).toLocaleString('nb-NO', { dateStyle: 'short', timeStyle: 'short' });
-        document.getElementById('dataUpdatedAt').textContent = `· sist oppdatert ${str}`;
+        const updatedDate = new Date(updatedAt);
+        const str = updatedDate.toLocaleString('nb-NO', { dateStyle: 'short', timeStyle: 'short' });
+        const ageHours = (Date.now() - updatedDate.getTime()) / 36e5;
+        const el = document.getElementById('dataUpdatedAt');
+        // The nightly job normally lands once every ~24h (with GitHub's own
+        // scheduling delay); only flag it once that cycle has clearly been
+        // missed, not on ordinary day-to-day timing jitter.
+        if (ageHours > 30) {
+            el.innerHTML = `· <span style="color:#f85149">sist oppdatert ${str} &mdash; ${Math.round(ageHours)} timer siden, kan være foreldet</span>`;
+        } else {
+            el.textContent = `· sist oppdatert ${str}`;
+        }
     }
 }
 
