@@ -2,9 +2,13 @@ name: Update gas storage data
 
 on:
   schedule:
-    - cron: '7 2 * * *'   # target ~04:07 Europe/Oslo; GitHub's scheduler can delay
-                           # this by hours, so the job itself (not this time) is what
-                           # guarantees it only actually fetches once per UTC day
+    - cron: '0 19 * * *'  # Observed actual fire time lags the cron by ~6-7h in
+                           # this environment (e.g. 02:07 cron -> 08:23/08:40/09:03
+                           # actual on three consecutive days), so this targets
+                           # 19:00 UTC to land close to ~01:00-03:00 UTC the next
+                           # calendar day. Still an estimate, not a guarantee —
+                           # the once-per-day guard below (not this time) is what
+                           # actually ensures exactly one fetch per UTC day.
   workflow_dispatch:         # manual trigger always runs, regardless of today's state
 
 permissions:
