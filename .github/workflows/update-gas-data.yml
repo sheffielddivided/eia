@@ -2,12 +2,19 @@ name: Update gas storage data
 
 on:
   schedule:
-    - cron: '0 19 * * *'  # Observed actual fire time lags the cron by ~6-7h in
-                           # this environment (e.g. 02:07 cron -> 08:23/08:40/09:03
-                           # actual on three consecutive days), so this targets
-                           # 19:00 UTC to land close to ~01:00-03:00 UTC the next
-                           # calendar day. Still an estimate, not a guarantee —
-                           # the once-per-day guard below (not this time) is what
+    - cron: '0 2 * * *'   # EEX's TTF CSV is republished daily at ~04:20 UTC
+                           # (confirmed via its Last-Modified header), so the
+                           # previous day's TTF price isn't available before
+                           # that. GitHub delays scheduled runs here by ~4-7h
+                           # in practice (19:00 cron -> 23:14 actual on one
+                           # measured day), so 02:00 is chosen to land the
+                           # actual execution around ~06:00-09:00 UTC -- after
+                           # EEX's publish, not before it. A 19:00 cron was
+                           # tried first on the (wrong) assumption that later
+                           # is simply better; it actually landed same-day
+                           # ~23:00 UTC, well before that night's 04:20 publish,
+                           # so it kept missing the previous day's price. The
+                           # once-per-day guard below (not this time) is what
                            # actually ensures exactly one fetch per UTC day.
   workflow_dispatch:         # manual trigger always runs, regardless of today's state
 
