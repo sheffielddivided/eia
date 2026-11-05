@@ -179,7 +179,7 @@
         <button data-val="WCSSTUS1" onclick="selectSPR(this)">SPR only</button>
       </div>
       <div class="toggle-group" id="seriesGrpProducts" style="display:none">
-        <button data-val="WGRSTUS1" class="active" onclick="activateBtn(this);loadData()">Gasoline</button>
+        <button data-val="WGTSTUS1" class="active" onclick="activateBtn(this);loadData()">Gasoline</button>
         <button data-val="WDISTUS1" onclick="activateBtn(this);loadData()">Distillate</button>
         <button data-val="WKJSTUS1" onclick="activateBtn(this);loadData()">Jet Fuel</button>
       </div>
@@ -343,7 +343,7 @@ const SERIES_LABELS = {
   WCRSTUS1: 'Crude Oil Stocks (incl. SPR)',
   WCESTUS1: 'Crude Oil Stocks (excl. SPR)',
   WCSSTUS1: 'Strategic Petroleum Reserve (SPR)',
-  WGRSTUS1: 'Total Gasoline Stocks',
+  WGTSTUS1: 'Total Gasoline Stocks',
   WDISTUS1: 'Distillate Stocks',
   WKJSTUS1: 'Jet Fuel Stocks',
 };
@@ -530,14 +530,11 @@ async function loadData() {
   showLoading('inv', true);
   try {
     const { start, end } = dateRange((yearsBack + 2) * 52);
-    // EIA returns WGRSTUS1 in million bbl; all other stock series in thousand bbl.
-    // Multiply WGRSTUS1 by 10000 to normalise so /1000 in rendering is consistent.
-    const scale = series === 'WGRSTUS1' ? 10000 : 1;
     const local = await loadLocal('data/eia/inventory.json');
     if (!local?.series?.[series]?.length)
       throw new Error('Data ikke tilgjengelig — oppdateres nattlig av GitHub Actions.');
     const rawData = local.series[series].filter(d => d.date >= start);
-    cachedData = rawData.map(d => ({ date: d.date, value: d.value * scale }));
+    cachedData = rawData.map(d => ({ date: d.date, value: d.value }));
     renderAll();
     showLoading('inv', false);
   } catch (e) { showErr('inv', e.message); showLoading('inv', false); }

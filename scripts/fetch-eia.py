@@ -89,7 +89,7 @@ print('=== Inventory ===')
 inv_rows = fetch_all('petroleum/stoc/wstk', {
     'frequency': 'weekly',
     'start': years_ago(15),
-    'facets[series][]': ['WCRSTUS1', 'WCESTUS1', 'WCSSTUS1', 'WGRSTUS1', 'WDISTUS1', 'WKJSTUS1'],
+    'facets[series][]': ['WCRSTUS1', 'WCESTUS1', 'WCSSTUS1', 'WGTSTUS1', 'WDISTUS1', 'WKJSTUS1'],
 })
 write('data/eia/inventory.json', {
     'updatedAt': now_iso(),
