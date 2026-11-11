@@ -567,6 +567,28 @@ function buildSeasonalData(data, yearsBack) {
     if (!byYW[y]) byYW[y] = {};
     byYW[y][wi] = d.value;
   }
+  // Most years have no report dated Dec 30/31, leaving the last bucket empty.
+  // Fill it by linear interpolation (by date) between the year's last report
+  // and the first report of the next year. Never for the current year.
+  const DAY = 24 * 60 * 60 * 1000;
+  const utc = s => { const [y, m, d] = s.split('-').map(Number); return Date.UTC(y, m - 1, d); };
+  const lastByYear = {}, firstByYear = {};
+  for (const d of data) {
+    const y = d.date.slice(0, 4);
+    if (!lastByYear[y]  || d.date > lastByYear[y].date)  lastByYear[y]  = d;
+    if (!firstByYear[y] || d.date < firstByYear[y].date) firstByYear[y] = d;
+  }
+  const estimated = {};
+  for (const y of Object.keys(byYW).map(Number)) {
+    if (y >= cy || byYW[y][NWEEKS - 1] != null) continue;
+    const a = lastByYear[y], b = firstByYear[y + 1];
+    if (!a || !b) continue;
+    const t  = Date.UTC(y, 11, 31);
+    const ta = utc(a.date), tb = utc(b.date);
+    if (tb - ta > 14 * DAY) continue;  // don't bridge real gaps
+    byYW[y][NWEEKS - 1] = a.value + (b.value - a.value) * (t - ta) / (tb - ta);
+    estimated[y] = true;
+  }
   const prev = [];
   for (let y = cy - 1; y >= cy - yearsBack; y--) if (byYW[y]) prev.push(y);
   const minB = [], maxB = [], avgB = [];
@@ -586,7 +608,7 @@ function buildSeasonalData(data, yearsBack) {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   });
   const currentYearArr = data.filter(d => d.date.startsWith(String(cy))).sort((a, b) => a.date.localeCompare(b.date));
-  return { currentLine, lastYearLine, minBand: minB, maxBand: maxB, avgBand: avgB, xLabels, currentYear: cy, prevYears: prev, currentYearArr };
+  return { currentLine, lastYearLine, lastYearEstLast: !!estimated[cy - 1], minBand: minB, maxBand: maxB, avgBand: avgB, xLabels, currentYear: cy, prevYears: prev, currentYearArr };
 }
 
 function renderSeasonalChart(s, label) {
@@ -607,7 +629,7 @@ function renderSeasonalChart(s, label) {
         { label: String(s.currentYear - 1), data: convertArr(s.lastYearLine), borderColor: 'rgba(253,186,116,0.5)', backgroundColor: 'transparent', borderWidth: 1.5, fill: false, pointRadius: 0, pointHoverRadius: 4, tension: 0.3, spanGaps: true, order: 1.5 },
       ],
     },
-    options: { ...BASE_OPT, plugins: { legend: { ...LEGEND, labels: { ...LEGEND.labels, filter: i => i.datasetIndex !== 1 } }, tooltip: { callbacks: { label: ctx => ctx.parsed.y == null ? null : ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)} million bbl` } } }, scales: { x: XSCALE, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmtN(v, 0) } } } },
+    options: { ...BASE_OPT, plugins: { legend: { ...LEGEND, labels: { ...LEGEND.labels, filter: i => i.datasetIndex !== 1 } }, tooltip: { callbacks: { label: ctx => ctx.parsed.y == null ? null : ` ${ctx.dataset.label}: ${fmt(ctx.parsed.y)} million bbl` + (ctx.datasetIndex === 3 && ctx.dataIndex === NWEEKS - 1 && s.lastYearEstLast ? ' (beregnet)' : '') } } }, scales: { x: XSCALE, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmtN(v, 0) } } } },
   });
 }
 
