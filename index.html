@@ -459,8 +459,9 @@ function convertArr(arr) {
 
 function weekOfYear(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
-  const date = new Date(y, m - 1, d);
-  return Math.floor((date - new Date(y, 0, 1)) / (7 * 24 * 60 * 60 * 1000));
+  // Use UTC: local-time dates shift by 1h across DST, which pushed dates that
+  // fall exactly on a 7-day multiple from Jan 1 into the previous week bucket.
+  return Math.floor((Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 1)) / (7 * 24 * 60 * 60 * 1000));
 }
 
 const XSCALE  = { ticks: { color: '#94a3b8', maxTicksLimit: 13, font: { size: 11 } }, grid: { color: '#1e2235' } };
