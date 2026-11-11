@@ -375,7 +375,8 @@ async function loadAndRender(selKey) {
         const todayKey = String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
         const todayIdx = DAY_KEYS.indexOf(todayKey);
 
-        renderChart(curData, minData, maxData, todayIdx);
+        const prevData = fillSingleDayGaps(DAY_KEYS.map(k => histMaps.at(-1)[k] ?? null));
+        renderChart(curData, minData, maxData, todayIdx, prevData);
         renderStats(curData, minData, maxData);
     } catch (err) {
         errorEl.textContent = `Feil ved henting av data: ${err.message}`;
@@ -386,7 +387,7 @@ async function loadAndRender(selKey) {
     }
 }
 
-function renderChart(curData, minData, maxData, todayIdx) {
+function renderChart(curData, minData, maxData, todayIdx, prevData) {
     const ctx = document.getElementById('myChart').getContext('2d');
     if (chartInstance) chartInstance.destroy();
 
@@ -436,6 +437,19 @@ function renderChart(curData, minData, maxData, todayIdx) {
                     tension: 0.3,
                     spanGaps: false,
                     order: 1,
+                },
+                {
+                    // Last year: same hue as current year, lower contrast
+                    label: String(CUR_YEAR - 1),
+                    data: prevData,
+                    borderColor: 'rgba(121,192,255,0.5)',
+                    backgroundColor: 'transparent',
+                    pointRadius: 0,
+                    borderWidth: 1.5,
+                    fill: false,
+                    tension: 0.3,
+                    spanGaps: true,
+                    order: 2,
                 },
             ],
         },
@@ -619,7 +633,7 @@ async function loadAndRenderLng(selKey) {
         const todayKey = String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
         const todayIdx = DAY_KEYS.indexOf(todayKey);
 
-        renderLngChart(curSmooth, minData, maxData, todayIdx);
+        renderLngChart(curSmooth, minData, maxData, todayIdx, histSmooth.at(-1));
         renderLngStats(curSmooth, curRaw, minData, maxData);
     } catch (err) {
         errorEl.textContent = `Feil ved henting av data: ${err.message}`;
@@ -630,7 +644,7 @@ async function loadAndRenderLng(selKey) {
     }
 }
 
-function renderLngChart(curData, minData, maxData, todayIdx) {
+function renderLngChart(curData, minData, maxData, todayIdx, prevData) {
     const ctx = document.getElementById('lngChart').getContext('2d');
     if (lngChartInstance) lngChartInstance.destroy();
 
@@ -677,6 +691,19 @@ function renderLngChart(curData, minData, maxData, todayIdx) {
                     tension: 0.3,
                     spanGaps: false,
                     order: 1,
+                },
+                {
+                    // Last year: same hue as current year, lower contrast
+                    label: String(CUR_YEAR - 1),
+                    data: prevData,
+                    borderColor: 'rgba(240,210,110,0.5)',
+                    backgroundColor: 'transparent',
+                    pointRadius: 0,
+                    borderWidth: 1.5,
+                    fill: false,
+                    tension: 0.3,
+                    spanGaps: true,
+                    order: 2,
                 },
             ],
         },
