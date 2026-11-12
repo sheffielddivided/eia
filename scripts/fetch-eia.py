@@ -115,6 +115,15 @@ for group in flow_groups:
     })
     pet_map.update(to_series_map(rows))
 
+# Monthly crude field production (Petroleum Supply Monthly, ~2 month lag).
+# Shown as an overlay on the weekly crude production estimate (WCRFPUS2).
+monthly_rows = fetch_all('petroleum/crd/crpdn', {
+    'frequency': 'monthly',
+    'start': years_ago(20, monthly=True),
+    'facets[series][]': ['MCRFPUS2'],
+})
+pet_monthly_map = to_series_map(monthly_rows)
+
 # ── LNG Flows ─────────────────────────────────────────────────────────────────
 print('=== LNG Flows ===')
 lng_rows = fetch_all('natural-gas/move/expc', {
@@ -141,6 +150,7 @@ lng_agg = sorted(
 write('data/eia/flows.json', {
     'updatedAt': now_iso(),
     'petroleum': pet_map,
+    'petroleum_monthly': pet_monthly_map,
     'lng': lng_agg,
 })
 
