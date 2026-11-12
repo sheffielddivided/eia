@@ -360,6 +360,10 @@ const FLOW_PRODUCTS = {
       { id: 'WCREXUS2', label: 'Exports',        color: '#f97316', dash: [] },
       { id: 'WCRRIUS2', label: 'Refinery Input', color: '#e879f9', dash: [5,3] },
     ],
+    // Monthly series drawn as a step line over the weekly dates of each month
+    monthly: [
+      { id: 'MCRFPUS2', label: 'Production (monthly, PSM)', color: '#facc15', dash: [6,4] },
+    ],
   },
   gasoline: {
     label: 'Gasoline', endpoint: 'petroleum/sum/sndw', unit: 'thousand bbl/day',
@@ -821,7 +825,12 @@ async function fetchPetroleumFlows(product, weeks) {
       const data = (local.petroleum[s.id] ?? []).filter(d => d.date >= start);
       if (data.length) byId[s.id] = data;
     }
-    if (Object.keys(byId).length) return byId;
+    const monthly = {};
+    for (const s of product.monthly ?? []) {
+      const data = (local.petroleum_monthly?.[s.id] ?? []).filter(d => d.date >= start.slice(0, 7));
+      if (data.length) monthly[s.id] = data;
+    }
+    if (Object.keys(byId).length) return { ...byId, _monthly: monthly };
   }
   throw new Error('Data ikke tilgjengelig — oppdateres nattlig av GitHub Actions.');
 }
@@ -839,7 +848,8 @@ async function fetchLng(weeks) {
   throw new Error('Data ikke tilgjengelig — oppdateres nattlig av GitHub Actions.');
 }
 
-function renderFlowsChart(byId, product) {
+function renderFlowsChart(allById, product) {
+  const { _monthly: monthlyById = {}, ...byId } = allById;
   const canvas = document.getElementById('flowChart');
   canvas.style.display = 'block';
   const dateSet = new Set();
@@ -852,6 +862,11 @@ function renderFlowsChart(byId, product) {
     const lookup = Object.fromEntries(byId[s.id].map(d => [d.date, d.value]));
     return { label: s.label, data: dates.map(d => lookup[d] ?? null), borderColor: s.color, backgroundColor: 'transparent', borderWidth: 2, borderDash: s.dash, pointRadius: dates.length > 150 ? 0 : 2, pointHoverRadius: 5, tension: 0.3, spanGaps: false };
   });
+  for (const s of product.monthly ?? []) {
+    if (!monthlyById[s.id]?.length) continue;
+    const lookup = Object.fromEntries(monthlyById[s.id].map(d => [d.date, d.value]));
+    datasets.push({ label: s.label, data: dates.map(d => lookup[d.slice(0, 7)] ?? null), borderColor: s.color, backgroundColor: 'transparent', borderWidth: 2, borderDash: s.dash, pointRadius: 0, pointHoverRadius: 4, stepped: 'middle', spanGaps: false });
+  }
   if (!datasets.length) throw new Error('None of the expected series found in the API response.');
   if (flowChart) flowChart.destroy();
   flowChart = new Chart(canvas, {
