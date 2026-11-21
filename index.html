@@ -371,6 +371,13 @@
       <div class="toggle-group" id="omFreqGrp">
         <button data-val="quarterly" class="active" onclick="activateBtn(this);renderOilMarket()">Quarterly</button>
         <button data-val="monthly"   onclick="activateBtn(this);renderOilMarket()">Monthly</button>
+        <button data-val="annual"    onclick="activateBtn(this);renderOilMarket()">Annual</button>
+      </div>
+      <div class="toggle-group" id="omRangeGrp">
+        <button data-val="3"   class="active" onclick="activateBtn(this);renderOilMarket()">3y</button>
+        <button data-val="5"   onclick="activateBtn(this);renderOilMarket()">5y</button>
+        <button data-val="10"  onclick="activateBtn(this);renderOilMarket()">10y</button>
+        <button data-val="all" onclick="activateBtn(this);renderOilMarket()">All</button>
       </div>
       <div class="toggle-group" id="omModeGrp">
         <button data-val="level" class="active" onclick="activateBtn(this);renderOilMarket()">Level</button>
@@ -1108,6 +1115,7 @@ const OM_ROWS = [
 
 const omOpen = new Set();
 let omData = null;
+let omLastView = null;
 
 async function loadOilMarket() {
   hideErr('om');
@@ -1119,27 +1127,33 @@ async function loadOilMarket() {
   renderOilMarket();
 }
 
-// Periods for the selected frequency and whether each one includes forecast months.
-function omColumns(freq) {
+// Periods for the selected frequency/range and whether each one includes forecast months.
+// The range ends with the last forecast year; quarterly and monthly views also get
+// annual summary columns for the three outlook years.
+function omColumns(freq, range) {
   const lastHist = omData.lastHistMonth;                 // 'YYYY-MM'
-  const [ly] = lastHist.split('-').map(Number);
-  const q = p => { const [y, m] = p.split('-').map(Number); return `${y}-Q${Math.ceil(m / 3)}`; };
+  const ly = +lastHist.slice(0, 4), endY = ly + 1;
+  const d = omData.data[freq] || {};
+  const periods = [...new Set([...Object.keys(d.PAPR_WORLD || {}), ...Object.keys(d.PATC_WORLD || {})])].sort();
+  const firstY = +(periods[0] || String(endY)).slice(0, 4);
+  const startY = range === 'all' ? firstY : Math.max(firstY, endY - +range + 1);
+  const inRange = periods.filter(p => { const y = +p.slice(0, 4); return y >= startY && y <= endY; });
   const cols = [];
-  if (freq === 'quarterly') {
-    for (let y = ly - 1; y <= ly + 1; y++)
-      for (let i = 1; i <= 4; i++) {
-        const p = `${y}-Q${i}`;
-        cols.push({ p, freq, year: y, label: `Q${i}`, fc: p >= q(lastHist) && `${y}-${String(i * 3).padStart(2, '0')}` > lastHist });
-      }
-  } else {
-    const months = Object.keys(omData.data.monthly.PAPR_WORLD || {}).sort();
-    const startYM = `${ly - 1}-07`;
-    months.filter(p => p >= startYM).forEach(p => {
-      const [y, m] = p.split('-').map(Number);
-      cols.push({ p, freq, year: y, label: new Date(y, m - 1, 1).toLocaleString('en', { month: 'short' }), fc: p > lastHist });
-    });
+  if (freq === 'annual') {
+    inRange.forEach(p => cols.push({ p, freq, year: 'Annual', label: p, fc: `${p}-12` > lastHist }));
+    return cols;
   }
-  for (let y = ly - 1; y <= ly + 1; y++)
+  inRange.forEach(p => {
+    const y = +p.slice(0, 4);
+    if (freq === 'quarterly') {
+      const qn = +p.slice(-1);
+      cols.push({ p, freq, year: y, label: `Q${qn}`, fc: `${y}-${String(qn * 3).padStart(2, '0')}` > lastHist });
+    } else {
+      const m = +p.slice(5, 7);
+      cols.push({ p, freq, year: y, label: new Date(y, m - 1, 1).toLocaleString('en', { month: 'short' }), fc: p > lastHist });
+    }
+  });
+  for (let y = Math.max(startY, ly - 1); y <= endY; y++)
     cols.push({ p: String(y), freq: 'annual', year: y, label: String(y), ann: true, fc: `${y}-12` > lastHist });
   return cols;
 }
@@ -1166,7 +1180,7 @@ function renderOilMarket() {
   if (!omData) return;
   const freq = getActiveVal('omFreqGrp');
   const yoy  = getActiveVal('omModeGrp') === 'yoy';
-  const cols = omColumns(freq);
+  const cols = omColumns(freq, getActiveVal('omRangeGrp'));
   const tbl  = document.getElementById('omTable');
 
   // Header: year band + period labels
@@ -1205,6 +1219,9 @@ function renderOilMarket() {
     html += '</tr>';
   });
   tbl.innerHTML = html + '</tbody>';
+  // Long ranges: start scrolled to the right so the outlook years are in view.
+  const sc = tbl.parentElement, viewKey = freq + '|' + getActiveVal('omRangeGrp');
+  if (viewKey !== omLastView) { sc.scrollLeft = sc.scrollWidth; omLastView = viewKey; }
 
   const rel = new Date(omData.release + '-01T00:00:00');
   const relLabel = rel.toLocaleString('en', { month: 'long', year: 'numeric' });

@@ -44,10 +44,11 @@ T3C = [
 ]
 SERIES = T3A + T3C
 
+# Full history: most series start in 1993 (consumption 1990, OECD stocks 2003).
 FREQS = {
-    'monthly':   str(date.today().year - 3) + '-01',
-    'quarterly': str(date.today().year - 3) + '-Q1',
-    'annual':    str(date.today().year - 6),
+    'monthly':   '1990-01',
+    'quarterly': '1990-Q1',
+    'annual':    '1990',
 }
 
 
@@ -89,7 +90,7 @@ for freq, start in FREQS.items():
     for row in fetch(freq, start):
         sid = row.get('seriesId')
         try:
-            v = round(float(row['value']), 4)
+            v = round(float(row['value']), 3)
         except (KeyError, TypeError, ValueError):
             continue
         out.setdefault(sid, {})[row['period']] = v
