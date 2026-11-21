@@ -23,6 +23,11 @@ jobs:
           EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
         run: python scripts/fetch-eia.py
 
+      - name: Fetch STEO world oil balance (Table 3a + 3c)
+        env:
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+        run: python scripts/fetch-steo.py
+
       - name: Commit if changed
         run: |
           git config user.name  "github-actions[bot]"

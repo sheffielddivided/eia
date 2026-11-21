@@ -32,7 +32,10 @@
       border-bottom: 1px solid #2d3148;
       padding: 0 2rem;
       display: flex;
+      overflow-x: auto;
+      scrollbar-width: none;
     }
+    .view-nav::-webkit-scrollbar { display: none; }
     .view-nav button {
       background: none;
       border: none;
@@ -43,6 +46,8 @@
       cursor: pointer;
       transition: color 0.15s, border-color 0.15s;
       margin-bottom: -1px;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
     .view-nav button:hover { color: #cbd5e1; }
     .view-nav button.active { color: #f1f5f9; border-bottom-color: #4f6ef7; font-weight: 600; }
@@ -137,6 +142,55 @@
     }
     .site-footer a { color: #60a5fa; text-decoration: none; }
     .site-footer a:hover { text-decoration: underline; }
+
+    /* ── Oil Market (STEO) ── */
+    .om-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.75rem; margin-bottom: 1.25rem; }
+    .om-kpi { background: #1a1d27; border: 1px solid #2d3148; border-radius: 10px; padding: 0.8rem 1rem; }
+    .om-kpi .k-label { font-size: 0.72rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; }
+    .om-kpi .k-val { font-size: 1.35rem; font-weight: 650; color: #f1f5f9; margin-top: 0.2rem; font-variant-numeric: tabular-nums; }
+    .om-kpi .k-val small { font-size: 0.75rem; color: #64748b; font-weight: 500; margin-left: 0.2rem; }
+    .om-kpi .k-sub { font-size: 0.74rem; color: #64748b; margin-top: 0.15rem; font-variant-numeric: tabular-nums; }
+    .pos { color: #4ade80 !important; } .neg { color: #f87171 !important; }
+
+    .om-card { padding: 0; overflow: hidden; }
+    .om-card-head { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; align-items: baseline; padding: 1rem 1.25rem 0.75rem; }
+    .om-card-head h2 { margin: 0; }
+    .om-card-head .om-sub { font-size: 0.75rem; color: #64748b; }
+    .om-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-top: 1px solid #2d3148; }
+    table.om { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 0.76rem; font-variant-numeric: tabular-nums; }
+    table.om th, table.om td { padding: 0.26rem 0.42rem; white-space: nowrap; text-align: right; }
+    table.om thead th { position: sticky; top: 0; background: #1e2235; color: #94a3b8; font-weight: 600; font-size: 0.72rem; border-bottom: 1px solid #2d3148; }
+    table.om thead tr.yr th { color: #cbd5e1; font-size: 0.74rem; border-bottom: none; padding-bottom: 0; }
+    table.om th:first-child, table.om td:first-child { position: sticky; left: 0; z-index: 1; text-align: left; background: #1a1d27; min-width: 205px; border-right: 1px solid #2d3148; }
+    table.om thead th:first-child { background: #1e2235; z-index: 2; }
+    table.om tbody tr:hover td { background: #20243a; }
+    table.om td.fc { background: #1f2333; color: #a5b4cc; font-style: italic; }
+    table.om tbody tr:hover td.fc { background: #262b43; }
+    table.om .ys { border-left: 1px solid #2d3148; }
+    table.om .ann { border-left: 2px solid #3b5bdb; }
+    table.om .ann ~ .ann { border-left: 1px solid #2d3148; }
+    table.om tr.sec td { background: #151824 !important; color: #e2e8f0; font-weight: 650; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.05em; padding-top: 0.6rem; border-top: 1px solid #2d3148; }
+    table.om tr.grp td:first-child { color: #64748b; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; padding-top: 0.45rem; }
+    table.om tr.tot td { font-weight: 650; color: #f1f5f9; }
+    table.om tr.l1 td:first-child { padding-left: 1.3rem; }
+    table.om tr.l2 td:first-child { padding-left: 2.2rem; color: #94a3b8; }
+    table.om tr.l3 td:first-child { padding-left: 3.1rem; color: #94a3b8; }
+    table.om tr.l2 td, table.om tr.l3 td { color: #a8b3c7; }
+    table.om tr.hl td { background: #172033; }
+    table.om tr.hl td:first-child { background: #172033; color: #93c5fd; font-weight: 600; }
+    table.om tr.hidden { display: none; }
+    table.om .tw { cursor: pointer; user-select: none; }
+    table.om .tw::before { content: '▸'; display: inline-block; width: 0.9rem; color: #4f6ef7; transition: transform 0.15s; }
+    table.om .tw.open::before { transform: rotate(90deg); }
+    table.om .src { font-size: 0.62rem; color: #475569; margin-left: 0.35rem; font-weight: 500; text-transform: none; letter-spacing: 0; }
+    .om-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; padding: 0.7rem 1.25rem 0.9rem; font-size: 0.72rem; color: #64748b; border-top: 1px solid #2d3148; }
+    .om-legend .sw { display: inline-block; width: 0.8rem; height: 0.8rem; border-radius: 2px; vertical-align: -2px; margin-right: 0.3rem; border: 1px solid #2d3148; }
+    @media (max-width: 640px) {
+      main { padding: 1.25rem 1rem; }
+      header, .view-nav { padding-left: 1rem; padding-right: 1rem; }
+      table.om th:first-child, table.om td:first-child { min-width: 165px; max-width: 165px; overflow: hidden; text-overflow: ellipsis; }
+      .om-kpi .k-val { font-size: 1.15rem; }
+    }
   </style>
 </head>
 <body>
@@ -166,6 +220,7 @@
   <button id="tabProducts"               onclick="setView('products')">Products</button>
   <button id="tabFlows"                  onclick="setView('flows')">Flows</button>
   <button id="tabPrices"                 onclick="setView('prices')">Prices</button>
+  <button id="tabOilMarket"              onclick="setView('oilmarket')">Oil Market</button>
 </nav>
 
 <main>
@@ -307,6 +362,45 @@
         <canvas id="priceChart" style="display:none"></canvas>
       </div>
       <div class="footnote" id="footerPrice"></div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════ OIL MARKET (STEO) ══════════════════════════ -->
+  <div id="oilmarketView" style="display:none">
+    <div class="controls">
+      <div class="toggle-group" id="omFreqGrp">
+        <button data-val="quarterly" class="active" onclick="activateBtn(this);renderOilMarket()">Quarterly</button>
+        <button data-val="monthly"   onclick="activateBtn(this);renderOilMarket()">Monthly</button>
+      </div>
+      <div class="toggle-group" id="omModeGrp">
+        <button data-val="level" class="active" onclick="activateBtn(this);renderOilMarket()">Level</button>
+        <button data-val="yoy"   onclick="activateBtn(this);renderOilMarket()">Δ y/y</button>
+      </div>
+      <div class="spacer"></div>
+      <div class="toggle-group">
+        <button onclick="omExpandAll(true)">Expand all</button>
+        <button onclick="omExpandAll(false)">Collapse</button>
+      </div>
+    </div>
+
+    <div id="omErrorBox" style="display:none"></div>
+    <div class="om-kpis" id="omKpis"></div>
+
+    <div class="chart-card om-card">
+      <div class="om-card-head">
+        <h2>World Liquid Fuels Balance</h2>
+        <span class="om-sub" id="omSub">STEO Table 3a + 3c</span>
+      </div>
+      <div class="om-scroll">
+        <div class="status" id="omLoadingMsg"><div class="spinner"></div><br>Loading STEO data…</div>
+        <table class="om" id="omTable"></table>
+      </div>
+      <div class="om-legend">
+        <span><span class="sw" style="background:#1f2333"></span>Forecast (shaded, italic)</span>
+        <span>Production &amp; consumption in million b/d · inventories in million barrels (end of period)</span>
+        <span>Market balance = production − consumption (positive = implied stock build)</span>
+        <span>OPEC country detail is published for historical months only</span>
+      </div>
     </div>
   </div>
 
@@ -484,15 +578,18 @@ function setView(view) {
   document.getElementById('tabProducts').classList.toggle('active', isProducts);
   document.getElementById('tabFlows').classList.toggle('active', view === 'flows');
   document.getElementById('tabPrices').classList.toggle('active', view === 'prices');
+  document.getElementById('tabOilMarket').classList.toggle('active', view === 'oilmarket');
   document.getElementById('inventoryView').style.display  = isInv             ? '' : 'none';
   document.getElementById('refiningView').style.display   = view === 'refining'? '' : 'none';
   document.getElementById('flowsView').style.display      = view === 'flows'   ? '' : 'none';
   document.getElementById('pricesView').style.display     = view === 'prices'  ? '' : 'none';
+  document.getElementById('oilmarketView').style.display  = view === 'oilmarket' ? '' : 'none';
   document.getElementById('seriesGrpCrude').style.display    = isCrude    ? '' : 'none';
   document.getElementById('seriesGrpProducts').style.display = isProducts ? '' : 'none';
   if (view === 'refining' && !refineChart) loadRefining();
   if (view === 'flows'    && !flowChart)   loadFlows();
   if (view === 'prices'   && !priceChart)  loadPrices();
+  if (view === 'oilmarket') loadOilMarket();
   if (isInv) loadData();
 }
 
@@ -926,6 +1023,253 @@ function renderPricesChart(results, group) {
     data: { labels: dates, datasets },
     options: { ...BASE_OPT, plugins: { legend: LEGEND, tooltip: { callbacks: { label: ctx => ctx.parsed.y == null ? null : ` ${ctx.dataset.label}: ${fmtN(ctx.parsed.y, 2)} ${group.unit}` } } }, scales: { x: XSCALE, y: { ...YSCALE, ticks: { ...YSCALE.ticks, callback: v => fmtN(v, 2) } } } },
   });
+}
+
+// ── Oil Market (STEO Table 3a + 3c) ───────────────────────────────────────────
+
+// Row layout: Table 3a, with the production block enriched by Table 3c.
+// kind: sec = section header, grp = sub-header, tot = bold total.
+// lvl = indent; parent = id of the collapsible row it belongs to.
+// calc = derived series; fmt 0 = integer (inventory levels).
+const OM_ROWS = [
+  { kind: 'sec', label: 'Production', note: 'million b/d' },
+  { kind: 'grp', label: 'By type', src: '3a' },
+  { id: 'PAPR_WORLD',   label: 'World total', kind: 'tot' },
+  { id: 'COPR_WORLD',   label: 'Crude oil', lvl: 1 },
+  { id: 'WORLD_NC',     label: 'Other liquids', lvl: 1 },
+  { id: 'PAPR_OPEC',    label: 'OPEC total', lvl: 1, tw: 'opecType' },
+  { id: 'COPR_OPEC',    label: 'Crude oil', lvl: 2, parent: 'opecType' },
+  { id: 'OPEC_NC',      label: 'Other liquids', lvl: 2, parent: 'opecType' },
+  { id: 'PAPR_NONOPEC', label: 'Non-OPEC total', lvl: 1, tw: 'nonopecType' },
+  { id: 'COPR_NONOPEC', label: 'Crude oil', lvl: 2, parent: 'nonopecType' },
+  { id: 'NONOPEC_NC',   label: 'Other liquids', lvl: 2, parent: 'nonopecType' },
+
+  { kind: 'grp', label: 'By producer group', src: '3c' },
+  { id: 'PAPR_OPECPLUS',        label: 'OPEC+ total', kind: 'tot', lvl: 1 },
+  { id: 'PAPR_OPECPLUS_OPEC',   label: 'OPEC members in OPEC+ quotas', lvl: 2 },
+  { id: 'PAPR_OPECPLUS_OTHER',  label: 'Non-OPEC participants', lvl: 2, tw: 'opecPlusOther' },
+  { id: 'PAPR_RS', label: 'Russia',      lvl: 3, parent: 'opecPlusOther' },
+  { id: 'PAPR_KZ', label: 'Kazakhstan',  lvl: 3, parent: 'opecPlusOther' },
+  { id: 'PAPR_MX', label: 'Mexico',      lvl: 3, parent: 'opecPlusOther' },
+  { id: 'PAPR_MU', label: 'Oman',        lvl: 3, parent: 'opecPlusOther' },
+  { id: 'PAPR_AJ', label: 'Azerbaijan',  lvl: 3, parent: 'opecPlusOther' },
+  { id: 'PAPR_MY', label: 'Malaysia',    lvl: 3, parent: 'opecPlusOther' },
+  { id: 'PAPR_BA', label: 'Bahrain',     lvl: 3, parent: 'opecPlusOther' },
+  { id: 'PAPR_OD', label: 'South Sudan', lvl: 3, parent: 'opecPlusOther' },
+  { id: 'PAPR_BX', label: 'Brunei',      lvl: 3, parent: 'opecPlusOther' },
+  { id: 'PAPR_SU', label: 'Sudan',       lvl: 3, parent: 'opecPlusOther' },
+  { id: 'PAPR_US',              label: 'United States', lvl: 1 },
+  { id: 'PAPR_NONOPECPLUS_XUS', label: 'Non-OPEC+ excl. United States', lvl: 1 },
+
+  { kind: 'grp', label: 'OPEC by country', src: '3c' },
+  { id: 'PAPR_OPEC', label: 'OPEC total', lvl: 1, tw: 'opecCountry' },
+  { id: 'PAPR_SA', label: 'Saudi Arabia',      lvl: 2, parent: 'opecCountry' },
+  { id: 'PAPR_IZ', label: 'Iraq',              lvl: 2, parent: 'opecCountry' },
+  { id: 'PAPR_IR', label: 'Iran',              lvl: 2, parent: 'opecCountry' },
+  { id: 'PAPR_KU', label: 'Kuwait',            lvl: 2, parent: 'opecCountry' },
+  { id: 'PAPR_NI', label: 'Nigeria',           lvl: 2, parent: 'opecCountry' },
+  { id: 'PAPR_AG', label: 'Algeria',           lvl: 2, parent: 'opecCountry' },
+  { id: 'PAPR_LY', label: 'Libya',             lvl: 2, parent: 'opecCountry' },
+  { id: 'PAPR_VE', label: 'Venezuela',         lvl: 2, parent: 'opecCountry' },
+  { id: 'PAPR_CF', label: 'Congo (Brazzaville)', lvl: 2, parent: 'opecCountry' },
+  { id: 'PAPR_GB', label: 'Gabon',             lvl: 2, parent: 'opecCountry' },
+  { id: 'PAPR_EK', label: 'Equatorial Guinea', lvl: 2, parent: 'opecCountry' },
+
+  { kind: 'sec', label: 'Consumption', note: 'million b/d', src: '3a' },
+  { id: 'PATC_WORLD', label: 'World total', kind: 'tot' },
+  { id: 'PATC_OECD',  label: 'OECD total', lvl: 1, tw: 'oecd' },
+  { id: 'PATC_US',          label: 'United States', lvl: 2, parent: 'oecd' },
+  { id: 'PATC_OECD_EUROPE', label: 'Europe', lvl: 2, parent: 'oecd' },
+  { id: 'PATC_JA',          label: 'Japan', lvl: 2, parent: 'oecd' },
+  { id: 'PATC_CA',          label: 'Canada', lvl: 2, parent: 'oecd' },
+  { id: 'PATC_UST',         label: 'U.S. Territories', lvl: 2, parent: 'oecd' },
+  { id: 'PATC_OTHER_OECD',  label: 'Other OECD', lvl: 2, parent: 'oecd' },
+  { id: 'PATC_NON_OECD', label: 'Non-OECD total', lvl: 1, tw: 'nonoecd' },
+  { id: 'PATC_CH',             label: 'China', lvl: 2, parent: 'nonoecd' },
+  { id: 'PATC_OTHER_ASIA',     label: 'Other Asia', lvl: 2, parent: 'nonoecd' },
+  { id: 'PATC_FSU',            label: 'Eurasia', lvl: 2, parent: 'nonoecd' },
+  { id: 'PATC_NONOECD_EUROPE', label: 'Europe', lvl: 2, parent: 'nonoecd' },
+  { id: 'PATC_OTHER_NONOECD',  label: 'Other non-OECD', lvl: 2, parent: 'nonoecd' },
+
+  { kind: 'sec', label: 'Balance', note: 'million b/d' },
+  { id: 'BAL', label: 'Market balance (prod. − cons.)', kind: 'tot', hl: true, signed: true,
+    calc: (get) => (get('PAPR_WORLD') == null || get('PATC_WORLD') == null) ? null : get('PAPR_WORLD') - get('PATC_WORLD') },
+  { kind: 'grp', label: 'Inventory net withdrawals', src: '3a' },
+  { id: 'T3_STCHANGE_WORLD', label: 'World total', lvl: 1, signed: true },
+  { id: 'T3_STCHANGE_US',    label: 'United States', lvl: 2, signed: true },
+  { id: 'T3_STCHANGE_OOECD', label: 'Other OECD', lvl: 2, signed: true },
+  { id: 'T3_STCHANGE_NOECD', label: 'Other draws & balance', lvl: 2, signed: true },
+
+  { kind: 'sec', label: 'Commercial inventories', note: 'million barrels, end of period', src: '3a' },
+  { id: 'PASC_OECD_T3',  label: 'OECD total', kind: 'tot', fmt: 0 },
+  { id: 'PASC_US',       label: 'United States', lvl: 1, fmt: 0 },
+  { id: 'PASC_OOECD_T3', label: 'Other OECD', lvl: 1, fmt: 0 },
+];
+
+const omOpen = new Set();
+let omData = null;
+
+async function loadOilMarket() {
+  hideErr('om');
+  if (!omData) {
+    omData = await loadLocal('data/eia/steo.json');
+    document.getElementById('omLoadingMsg').style.display = 'none';
+    if (!omData) { showErr('om', 'STEO data (data/eia/steo.json) not available.'); return; }
+  }
+  renderOilMarket();
+}
+
+// Periods for the selected frequency and whether each one includes forecast months.
+function omColumns(freq) {
+  const lastHist = omData.lastHistMonth;                 // 'YYYY-MM'
+  const [ly] = lastHist.split('-').map(Number);
+  const q = p => { const [y, m] = p.split('-').map(Number); return `${y}-Q${Math.ceil(m / 3)}`; };
+  const cols = [];
+  if (freq === 'quarterly') {
+    for (let y = ly - 1; y <= ly + 1; y++)
+      for (let i = 1; i <= 4; i++) {
+        const p = `${y}-Q${i}`;
+        cols.push({ p, freq, year: y, label: `Q${i}`, fc: p >= q(lastHist) && `${y}-${String(i * 3).padStart(2, '0')}` > lastHist });
+      }
+  } else {
+    const months = Object.keys(omData.data.monthly.PAPR_WORLD || {}).sort();
+    const startYM = `${ly - 1}-07`;
+    months.filter(p => p >= startYM).forEach(p => {
+      const [y, m] = p.split('-').map(Number);
+      cols.push({ p, freq, year: y, label: new Date(y, m - 1, 1).toLocaleString('en', { month: 'short' }), fc: p > lastHist });
+    });
+  }
+  for (let y = ly - 1; y <= ly + 1; y++)
+    cols.push({ p: String(y), freq: 'annual', year: y, label: String(y), ann: true, fc: `${y}-12` > lastHist });
+  return cols;
+}
+
+function omPrevPeriod(col) {
+  if (col.freq === 'annual') return String(+col.p - 1);
+  const [y, rest] = col.p.split('-');
+  return `${+y - 1}-${rest}`;
+}
+
+function omValue(row, freq, p) {
+  const get = id => omData.data[freq]?.[id]?.[p];
+  const v = row.calc ? row.calc(get) : get(row.id);
+  return v == null ? null : v;
+}
+
+function omFmt(v, dec, signed) {
+  if (v == null) return '–';
+  const s = v.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  return signed && v > 0 ? '+' + s : s;
+}
+
+function renderOilMarket() {
+  if (!omData) return;
+  const freq = getActiveVal('omFreqGrp');
+  const yoy  = getActiveVal('omModeGrp') === 'yoy';
+  const cols = omColumns(freq);
+  const tbl  = document.getElementById('omTable');
+
+  // Header: year band + period labels
+  const yearSpans = [];
+  cols.forEach(c => {
+    const key = c.ann ? 'Year' : c.year;
+    const last = yearSpans[yearSpans.length - 1];
+    if (last && last.key === key) last.n++; else yearSpans.push({ key, n: 1, ann: c.ann });
+  });
+  let html = '<thead><tr class="yr"><th></th>' + yearSpans.map((s, i) =>
+    `<th colspan="${s.n}" class="${s.ann ? 'ann' : (i ? 'ys' : '')}" style="text-align:center">${s.key}</th>`).join('') + '</tr>';
+  html += '<tr><th>' + (yoy ? 'Change vs. same period last year' : '') + '</th>' + cols.map((c, i) =>
+    `<th class="${omColClass(cols, i)}">${c.label}</th>`).join('') + '</tr></thead><tbody>';
+
+  OM_ROWS.forEach(r => {
+    if (r.kind === 'sec' || r.kind === 'grp') {
+      const src = r.src ? `<span class="src">Table ${r.src}</span>` : '';
+      const note = r.note ? `<span class="src">${r.note}</span>` : '';
+      html += `<tr class="${r.kind}"><td>${r.label}${note}${src}</td><td colspan="${cols.length}"></td></tr>`;
+      return;
+    }
+    const cls = [r.kind === 'tot' ? 'tot' : '', r.lvl ? 'l' + r.lvl : '', r.hl ? 'hl' : '',
+                 r.parent && !omIsVisible(r) ? 'hidden' : ''].filter(Boolean).join(' ');
+    const dec = yoy ? (r.fmt === 0 ? 0 : 2) : (r.fmt ?? 2);
+    const signed = yoy || r.signed;
+    const label = r.tw
+      ? `<span class="tw${omOpen.has(r.tw) ? ' open' : ''}" onclick="omToggle('${r.tw}')">${r.label}</span>`
+      : r.label;
+    html += `<tr class="${cls}" data-parent="${r.parent || ''}"><td title="${r.id ? (omData.meta[r.id]?.name || r.label) + ' (' + r.id + ')' : r.label}">${label}</td>`;
+    cols.forEach((c, i) => {
+      let v = omValue(r, c.freq, c.p);
+      if (yoy && v != null) { const pv = omValue(r, c.freq, omPrevPeriod(c)); v = pv == null ? null : v - pv; }
+      const tone = (signed && v != null && Math.abs(v) >= (dec ? 0.005 : 0.5)) ? (v > 0 ? 'pos' : 'neg') : '';
+      html += `<td class="${[omColClass(cols, i), (r.hl || yoy) ? tone : ''].filter(Boolean).join(' ')}">${omFmt(v, dec, signed)}</td>`;
+    });
+    html += '</tr>';
+  });
+  tbl.innerHTML = html + '</tbody>';
+
+  const rel = new Date(omData.release + '-01T00:00:00');
+  const relLabel = rel.toLocaleString('en', { month: 'long', year: 'numeric' });
+  document.getElementById('omSub').textContent =
+    `STEO ${relLabel} · Table 3a enriched with Table 3c · history through ${omMonthLabel(omData.lastHistMonth)}`;
+  renderOmKpis();
+}
+
+function omColClass(cols, i) {
+  const c = cols[i], prev = cols[i - 1];
+  return [c.fc ? 'fc' : '', c.ann && !(prev && prev.ann) ? 'ann' : (!c.ann && prev && prev.year !== c.year ? 'ys' : '')].filter(Boolean).join(' ');
+}
+
+function omMonthLabel(ym) {
+  const [y, m] = ym.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleString('en', { month: 'short', year: 'numeric' });
+}
+
+function omIsVisible(r) {
+  // A row is visible when its parent toggle is open (and that toggle's own row is visible).
+  if (!r.parent) return true;
+  if (!omOpen.has(r.parent)) return false;
+  const owner = OM_ROWS.find(x => x.tw === r.parent);
+  return owner ? omIsVisible(owner) : true;
+}
+
+function omToggle(key) {
+  omOpen.has(key) ? omOpen.delete(key) : omOpen.add(key);
+  renderOilMarket();
+}
+
+function omExpandAll(open) {
+  OM_ROWS.forEach(r => { if (r.tw) open ? omOpen.add(r.tw) : omOpen.delete(r.tw); });
+  renderOilMarket();
+}
+
+function renderOmKpis() {
+  const lastHist = omData.lastHistMonth;
+  const [ly, lm] = lastHist.split('-').map(Number);
+  // Current quarter = the quarter after the last fully historical month
+  const cy = lm === 12 ? ly + 1 : ly, cq = lm === 12 ? 1 : Math.ceil((lm + 1) / 3);
+  const qp = `${cy}-Q${cq}`, qpPrev = `${cy - 1}-Q${cq}`;
+  const Q = (id, p) => omData.data.quarterly?.[id]?.[p];
+  const A = (id, y) => omData.data.annual?.[id]?.[String(y)];
+  const sgn = (v, d = 2) => v == null ? '–' : (v > 0 ? '+' : '') + v.toFixed(d);
+  const tone = v => v == null ? '' : v > 0 ? 'pos' : v < 0 ? 'neg' : '';
+
+  const prod = Q('PAPR_WORLD', qp), cons = Q('PATC_WORLD', qp);
+  const bal = prod != null && cons != null ? prod - cons : null;
+  const balNext = A('PAPR_WORLD', cy + 1) != null ? A('PAPR_WORLD', cy + 1) - A('PATC_WORLD', cy + 1) : null;
+  const stocks = Q('PASC_OECD_T3', qp), stocksPrev = Q('PASC_OECD_T3', qpPrev);
+  const opp = Q('PAPR_OPECPLUS', qp), oppPrev = Q('PAPR_OPECPLUS', qpPrev);
+  const dDem = A('PATC_WORLD', cy + 1) != null ? A('PATC_WORLD', cy + 1) - A('PATC_WORLD', cy) : null;
+  const ql = `Q${cq} ${cy}`;
+
+  const tiles = [
+    { label: 'World production', val: prod?.toFixed(2), unit: 'mb/d', sub: `${ql} · y/y ${sgn(prod - Q('PAPR_WORLD', qpPrev))}` },
+    { label: 'World consumption', val: cons?.toFixed(2), unit: 'mb/d', sub: `${ql} · y/y ${sgn(cons - Q('PATC_WORLD', qpPrev))}` },
+    { label: 'Market balance', val: sgn(bal), unit: 'mb/d', cls: tone(bal), sub: `${ql} · ${cy + 1} avg ${sgn(balNext)}` },
+    { label: 'OPEC+ production', val: opp?.toFixed(2), unit: 'mb/d', sub: `${ql} · y/y ${sgn(opp - oppPrev)}` },
+    { label: 'OECD comm. stocks', val: stocks?.toLocaleString('en-US', { maximumFractionDigits: 0 }), unit: 'mb', sub: `end ${ql} · y/y ${sgn(stocks - stocksPrev, 0)}` },
+    { label: `Demand growth ${cy + 1}`, val: sgn(dDem), unit: 'mb/d', cls: tone(dDem), sub: `${A('PATC_WORLD', cy + 1)?.toFixed(2) ?? '–'} mb/d avg` },
+  ];
+  document.getElementById('omKpis').innerHTML = tiles.map(t =>
+    `<div class="om-kpi"><div class="k-label">${t.label}</div><div class="k-val ${t.cls || ''}">${t.val ?? '–'}<small>${t.unit}</small></div><div class="k-sub">${t.sub}</div></div>`).join('');
 }
 
 // ── Loading / error ───────────────────────────────────────────────────────────
