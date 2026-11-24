@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gassforbruk i Europa</title>
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="icon" href="apple-touch-icon.png" type="image/png" />
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-2: #1c2129;
+    --border: #30363d;
+    --grid: rgba(139,148,158,.14);
+    --text: #c9d1d9;
+    --text-strong: #f0f3f6;
+    --muted: #8b949e;
+    --accent: #388bfd;
+    --accent-dim: rgba(56,139,253,0.15);
+    --up: #e66767;
+    --down: #3fb950;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    min-height: 100vh;
+    padding: 2rem 1.5rem 3rem;
+    max-width: 1080px;
+    margin: 0 auto;
+    line-height: 1.45;
+  }
+  header { margin-bottom: 1.25rem; }
+  h1 { font-size: 1.45rem; font-weight: 600; color: var(--text-strong); margin-bottom: .25rem; }
+  h2 { font-size: 1.02rem; font-weight: 600; color: var(--text-strong); }
+  .subtitle { font-size: .82rem; color: var(--muted); max-width: 760px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .toolbar {
+    position: sticky; top: 0; z-index: 10;
+    display: flex; flex-wrap: wrap; gap: .75rem 1.25rem; align-items: center;
+    background: rgba(13,17,23,.92); backdrop-filter: blur(6px);
+    padding: .7rem 0; margin-bottom: 1rem; border-bottom: 1px solid var(--border);
+  }
+  .ctl { display: flex; align-items: center; gap: .45rem; font-size: .8rem; color: var(--muted); }
+  select {
+    font: inherit; font-size: .84rem; color: var(--text); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 6px; padding: .34rem .55rem;
+  }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .seg button {
+    font: inherit; font-size: .8rem; padding: .34rem .75rem; background: var(--surface);
+    color: var(--muted); border: 0; border-right: 1px solid var(--border); cursor: pointer;
+  }
+  .seg button:last-child { border-right: 0; }
+  .seg button:hover { color: var(--accent); }
+  .seg button.active { background: var(--accent-dim); color: var(--accent); font-weight: 500; }
+
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: .75rem; margin-bottom: 1.25rem; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .85rem 1rem; }
+  .kpi .lbl { font-size: .74rem; color: var(--muted); }
+  .kpi .val { font-size: 1.5rem; font-weight: 600; color: var(--text-strong); margin: .15rem 0 .05rem; font-variant-numeric: tabular-nums; }
+  .kpi .val small { font-size: .8rem; font-weight: 400; color: var(--muted); margin-left: .2rem; }
+  .kpi .sub { font-size: .74rem; color: var(--muted); }
+  .delta { font-weight: 600; }
+  .delta.neg { color: var(--down); }
+  .delta.pos { color: var(--up); }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.1rem 1.2rem 1rem; margin-bottom: 1rem; }
+  .card-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: .5rem 1rem; margin-bottom: .35rem; }
+  .card-desc { font-size: .78rem; color: var(--muted); margin-bottom: .75rem; max-width: 820px; }
+  .chart-wrapper { position: relative; height: 400px; }
+  .chart-wrapper.short { height: 320px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .grid2 .card { margin-bottom: 0; }
+  .section-gap { height: 1rem; }
+  .section-title { font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 1.6rem 0 .6rem; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: .3rem .9rem; font-size: .76rem; color: var(--text); margin-top: .65rem; }
+  .legend span { display: inline-flex; align-items: center; gap: .35rem; cursor: pointer; user-select: none; }
+  .legend span.off { opacity: .35; }
+  .legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .legend i.line { height: 3px; border-radius: 2px; width: 16px; }
+  .legend i.dash { height: 0; border-top: 2px dashed; width: 16px; border-radius: 0; background: none !important; }
+
+  .note { font-size: .74rem; color: var(--muted); margin-top: .5rem; }
+  .tbl-toggle { font: inherit; font-size: .76rem; color: var(--accent); background: none; border: 0; cursor: pointer; padding: 0; margin-top: .6rem; margin-right: 1rem; }
+  .tbl-wrap { overflow-x: auto; margin-top: .6rem; display: none; }
+  .tbl-wrap.open { display: block; }
+  table { border-collapse: collapse; font-size: .74rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  th, td { padding: .25rem .55rem; text-align: right; border-bottom: 1px solid var(--border); }
+  th:first-child, td:first-child { text-align: left; position: sticky; left: 0; background: var(--surface); }
+  th { color: var(--muted); font-weight: 500; }
+
+  .loading { display: flex; align-items: center; justify-content: center; gap: .6rem; padding: 4rem 0; color: var(--muted); font-size: .85rem; }
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error { color: var(--up); padding: 2rem 0; font-size: .85rem; }
+
+  footer { margin-top: 2rem; font-size: .76rem; color: var(--muted); border-top: 1px solid var(--border); padding-top: 1rem; }
+  footer h3 { font-size: .8rem; color: var(--text); margin: .8rem 0 .3rem; font-weight: 600; }
+  footer ul { padding-left: 1.1rem; }
+  footer li { margin-bottom: .2rem; }
+
+  @media (max-width: 860px) {
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .grid2 { grid-template-columns: 1fr; }
+    .grid2 .card { margin-bottom: 1rem; }
+  }
+  @media (max-width: 600px) {
+    body { padding: 1rem 1rem 2rem; }
+    .chart-wrapper { height: 300px; }
+    .chart-wrapper.short { height: 260px; }
+    .kpi .val { font-size: 1.25rem; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Gassforbruk i Europa</h1>
+  <p class="subtitle">Hvor stort er gassforbruket, hva brukes gassen til, og hvordan utvikler sektorene seg? Årlige energibalanser fra 1990 og månedstall frem til siste publiserte måned, fra Eurostat.</p>
+</header>
+
+<div class="toolbar">
+  <label class="ctl">Område
+    <select id="geoSel"></select>
+  </label>
+  <div class="ctl">Enhet
+    <div class="seg" id="unitSeg">
+      <button data-v="twh" class="active">TWh</button>
+      <button data-v="bcm">mrd. m³</button>
+    </div>
+  </div>
+  <label class="ctl">Referanse
+    <select id="refSel">
+      <option value="2017-2021" selected>Snitt 2017–2021</option>
+      <option value="2015-2019">Snitt 2015–2019</option>
+      <option value="2010-2014">Snitt 2010–2014</option>
+    </select>
+  </label>
+</div>
+
+<div id="app"><div class="loading"><div class="spinner"></div>Laster data …</div></div>
+
+<template id="tpl">
+  <div class="kpis" id="kpis"></div>
+
+  <div class="section-title">Årlig: hva brukes gassen til?</div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2 id="annualTitle">Gassforbruk etter anvendelse</h2>
+      <div class="seg" id="annualMode">
+        <button data-v="abs" class="active">Volum</button>
+        <button data-v="pct">Andel</button>
+      </div>
+    </div>
+    <p class="card-desc">Innenlands forbruk fordelt på hovedanvendelser. Kraft- og varmeproduksjon er gass brukt som brensel i kraftverk, kraftvarmeverk og fjernvarmeverk (inkl. industriens egne verk). Råstoff er gass brukt som innsatsvare, i hovedsak til ammoniakk/gjødsel og hydrogen. «Tap og statistiske avvik» kan være negativ; den vises da bare i verktøytipset. Klikk i forklaringen for å skjule serier.</p>
+    <div class="chart-wrapper"><canvas id="cAnnual"></canvas></div>
+    <div class="legend" id="lgAnnual"></div>
+    <p class="note" id="prelimNote"></p>
+    <button class="tbl-toggle" data-t="tblAnnual">Vis tabell</button><button class="tbl-toggle" id="csvAnnual">Last ned CSV</button>
+    <div class="tbl-wrap" id="tblAnnual"></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-head"><h2 id="changeTitle">Endring per sektor</h2>
+        <select id="changeYear"></select>
+      </div>
+      <p class="card-desc" id="changeDesc"></p>
+      <div class="chart-wrapper short"><canvas id="cChange"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Indeksert utvikling per sektor</h2></div>
+      <p class="card-desc" id="indexDesc"></p>
+      <div class="chart-wrapper short"><canvas id="cIndex"></canvas></div>
+      <div class="legend" id="lgIndex"></div>
+    </div>
+  </div>
+
+  <div class="section-gap"></div>
+  <div class="grid2">
+    <div class="card">
+      <div class="card-head"><h2>Kraft og varme: type anlegg</h2></div>
+      <p class="card-desc">Gass inn i kraftverk, fordelt på rene kraftverk, kraftvarmeverk (CHP) og rene varmeverk. Inkluderer både energiselskaper og industriens egenproduksjon.</p>
+      <div class="chart-wrapper short"><canvas id="cPower"></canvas></div>
+      <div class="legend" id="lgPower"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Industri etter bransje</h2></div>
+      <p class="card-desc">Industriens energibruk av gass (brensel til prosessvarme, damp m.m.). Råstoffbruk (ammoniakk, hydrogen, metanol) kommer i tillegg og vises i hovedfiguren.</p>
+      <div class="chart-wrapper short"><canvas id="cIndustry"></canvas></div>
+      <div class="legend" id="lgIndustry"></div>
+    </div>
+  </div>
+
+  <div class="section-title">Månedlig: hvordan utvikler forbruket seg nå?</div>
+
+  <div class="card">
+    <div class="card-head">
+      <h2>Månedlig forbruk</h2>
+      <div class="seg" id="rangeSeg">
+        <button data-v="3">3 år</button>
+        <button data-v="5" class="active">5 år</button>
+        <button data-v="10">10 år</button>
+        <button data-v="99">Alt</button>
+      </div>
+    </div>
+    <p class="card-desc">Innenlands forbruk per måned, delt i gass til kraft- og varmeverk (energiselskaper) og øvrig forbruk (industri, husholdninger, tjenesteyting, industriens egne kraftverk m.m.). Måneder uten rapportert kraftverksforbruk vises som udelt total.</p>
+    <div class="chart-wrapper"><canvas id="cMonthly"></canvas></div>
+    <div class="legend" id="lgMonthly"></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-head"><h2>Sesongprofil</h2>
+        <div class="seg" id="seasonSeg">
+          <button data-v="total" class="active">Totalt</button>
+          <button data-v="power">Kraft</button>
+          <button data-v="other">Øvrig</button>
+        </div>
+      </div>
+      <p class="card-desc" id="seasonDesc"></p>
+      <div class="chart-wrapper short"><canvas id="cSeason"></canvas></div>
+      <div class="legend" id="lgSeason"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Avvik fra referanseperioden</h2></div>
+      <p class="card-desc" id="devDesc"></p>
+      <div class="chart-wrapper short"><canvas id="cDev"></canvas></div>
+      <div class="legend" id="lgDev"></div>
+    </div>
+  </div>
+
+  <div class="section-gap"></div>
+  <div class="card">
+    <div class="card-head"><h2>Rullerende 12-månederssum</h2></div>
+    <p class="card-desc">Sum siste 12 måneder – fjerner sesongen og viser trenden måned for måned. Siste punkt kan sammenlignes direkte med årstallene over.</p>
+    <div class="chart-wrapper short"><canvas id="cRolling"></canvas></div>
+    <div class="legend" id="lgRolling"></div>
+  </div>
+</template>
+
+<footer>
+  <div id="stamp"></div>
+  <h3>Kilder</h3>
+  <ul>
+    <li>Årlig: Eurostat <a href="https://ec.europa.eu/eurostat/databrowser/view/nrg_cb_gas/default/table" target="_blank" rel="noopener">nrg_cb_gas</a> – fullstendig gassbalanse (1990–). Siste år er ofte foreløpig, med ufullstendig sektorfordeling.</li>
+    <li>Månedlig: Eurostat <a href="https://ec.europa.eu/eurostat/databrowser/view/nrg_cb_gasm/default/table" target="_blank" rel="noopener">nrg_cb_gasm</a> – månedlig gassbalanse (2008–), typisk 1–2 måneders etterslep.</li>
+  </ul>
+  <h3>Metode</h3>
+  <ul>
+    <li>Alle tall er i brennverdi (GCV). 1 TWh = 3 600 TJ. Omregning til mrd. m³ bruker landets egen rapporterte m³/TJ-faktor for perioden.</li>
+    <li>Sektorene summerer til «innenlands forbruk – beregnet» (IC_CAL). «Tap og statistiske avvik» er differansen, og kan være negativ.</li>
+    <li>Kraft og varme (årlig) = transformasjonsinput til elektrisitet og varme for både energiselskaper og egenprodusenter. «Energisektor og annen omforming» = energisektorens egenbruk (gassproduksjon, LNG, raffinerier m.m.) pluss øvrig transformasjon (bl.a. hydrogenproduksjon).</li>
+    <li>Foreløpig år: der Eurostat bare har publisert totaler (f.eks. «andre sektorer» uten fordeling på husholdninger og tjenesteyting), er totalen fordelt med forrige års andeler. Disse årene er markert.</li>
+    <li>Månedlig kraftverksforbruk (TI_EHG_MAP) dekker bare energiselskapenes anlegg; industriens egne kraftverk ligger i «øvrig». Månedsserien ligger derfor ca. 10 % under årstallet for kraft og varme. EU27 per måned er summen av medlemslandene; for EU vises kraftfordelingen fra 2017, fordi dekningen er ufullstendig før det.</li>
+  </ul>
+</footer>
+
+<script>
+'use strict';
+const DATA_URL = 'data/eurostat/gas_consumption.json';
+
+const GEO_NAMES = {
+  EU27_2020: 'EU27', DE: 'Tyskland', IT: 'Italia', FR: 'Frankrike', NL: 'Nederland', ES: 'Spania',
+  PL: 'Polen', BE: 'Belgia', AT: 'Østerrike', HU: 'Ungarn', RO: 'Romania', CZ: 'Tsjekkia',
+  IE: 'Irland', PT: 'Portugal', EL: 'Hellas', SK: 'Slovakia', DK: 'Danmark', FI: 'Finland',
+  SE: 'Sverige', BG: 'Bulgaria', HR: 'Kroatia', SI: 'Slovenia', LT: 'Litauen', LV: 'Latvia',
+  EE: 'Estland', LU: 'Luxembourg', CY: 'Kypros', MT: 'Malta', NO: 'Norge',
+};
+// For EU27 the monthly power split is only trustworthy from this month on.
+const POWER_MONTHLY_FROM = { EU27_2020: '2017-01' };
+
+// Dark-mode categorical palette (validated order) + neutral for residual.
+const C = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#0ca30c', '#9085e9', '#e66767'];
+const NEUTRAL = '#6e7681';
+
+const EHG = ['TI_EHG_MAPE_E', 'TI_EHG_MAPCHP_E', 'TI_EHG_MAPH_E', 'TI_EHG_APE_E', 'TI_EHG_APCHP_E', 'TI_EHG_APH_E'];
+const OTH_CH = ['FC_OTH_HH_E', 'FC_OTH_CP_E', 'FC_OTH_AF_E', 'FC_OTH_FISH_E', 'FC_OTH_NSP_E'];
+const IND_CH = ['FC_IND_IS_E', 'FC_IND_CPC_E', 'FC_IND_NFM_E', 'FC_IND_NMM_E', 'FC_IND_TE_E', 'FC_IND_MAC_E',
+                'FC_IND_MQ_E', 'FC_IND_FBT_E', 'FC_IND_PPP_E', 'FC_IND_WP_E', 'FC_IND_CON_E', 'FC_IND_TL_E', 'FC_IND_NSP_E'];
+
+const COMPONENTS = [
+  { key: 'power',      label: 'Kraft- og varmeproduksjon',       color: C[0] },
+  { key: 'industry',   label: 'Industri (energibruk)',           color: C[1] },
+  { key: 'feedstock',  label: 'Råstoff (ikke-energetisk bruk)',  color: C[2] },
+  { key: 'households', label: 'Husholdninger',                   color: C[3] },
+  { key: 'services',   label: 'Tjenesteyting og offentlig',      color: C[4] },
+  { key: 'transport',  label: 'Transport',                       color: C[5] },
+  { key: 'energy',     label: 'Energisektor og annen omforming', color: C[6] },
+  { key: 'otherfc',    label: 'Landbruk, fiske m.m.',            color: C[7] },
+  { key: 'residual',   label: 'Tap og statistiske avvik',        color: NEUTRAL },
+];
+const POWER_PARTS = [
+  { key: 'elonly', label: 'Kun elektrisitet', codes: ['TI_EHG_MAPE_E', 'TI_EHG_APE_E'], color: C[0] },
+  { key: 'chp',    label: 'Kraftvarme (CHP)', codes: ['TI_EHG_MAPCHP_E', 'TI_EHG_APCHP_E'], color: C[1] },
+  { key: 'heat',   label: 'Kun varme',        codes: ['TI_EHG_MAPH_E', 'TI_EHG_APH_E'], color: C[2] },
+];
+const IND_PARTS = [
+  { label: 'Kjemi og petrokjemi',          codes: ['FC_IND_CPC_E'], color: C[0] },
+  { label: 'Ikke-metalliske mineraler',    codes: ['FC_IND_NMM_E'], color: C[1] },
+  { label: 'Næringsmidler',                codes: ['FC_IND_FBT_E'], color: C[2] },
+  { label: 'Jern og stål',                 codes: ['FC_IND_IS_E'],  color: C[3] },
+  { label: 'Papir og trykk',               codes: ['FC_IND_PPP_E'], color: C[4] },
+  { label: 'Ikke-jernholdige metaller',    codes: ['FC_IND_NFM_E'], color: C[5] },
+  { label: 'Maskiner og transportmidler',  codes: ['FC_IND_MAC_E', 'FC_IND_TE_E'], color: C[6] },
+  { label: 'Øvrig industri',               codes: null, color: NEUTRAL },
+];
+const MONTH_SERIES = [
+  { key: 'power', label: 'Kraft- og varmeverk', color: C[0] },
+  { key: 'other', label: 'Øvrig forbruk',       color: C[2] },
+  { key: 'undiv', label: 'Totalt (ikke fordelt)', color: NEUTRAL },
+];
+const MONTHS_NO = ['jan', 'feb', 'mar', 'apr', 'mai', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'des'];
+
+const state = { geo: 'EU27_2020', unit: 'twh', ref: [2017, 2021], annualMode: 'abs', range: 5, season: 'total',
+                hidden: { annual: new Set(), index: new Set(['transport', 'otherfc', 'residual', 'energy']) } };
+let RAW = null;
+const charts = {};
+
+// ---------- formatting ----------
+const nf = (d) => new Intl.NumberFormat('nb-NO', { maximumFractionDigits: d, minimumFractionDigits: d });
+function fmt(v, d) { if (v == null || !isFinite(v)) return '–'; return nf(d ?? (Math.abs(v) >= 100 ? 0 : 1)).format(v); }
+function fmtPct(v, d = 1) { if (v == null || !isFinite(v)) return '–'; return (v > 0 ? '+' : '') + nf(d).format(v) + ' %'; }
+const unitLabel = () => state.unit === 'twh' ? 'TWh' : 'mrd. m³';
+const sum = (a) => a.reduce((s, x) => s + (x || 0), 0);
+const avg = (a) => { const f = a.filter(x => x != null && isFinite(x)); return f.length ? sum(f) / f.length : null; };
+
+// ---------- data shaping ----------
+// TJ -> display unit. bcm uses the country's own m3/TJ ratio for the period.
+function factorFor(block, geo, period, icCode) {
+  if (state.unit === 'twh') return 1 / 3600;
+  const g = RAW[block].geo[geo];
+  const m3 = g.MIO_M3?.[icCode] || {}, tj = g.TJ_GCV?.[icCode] || {};
+  if (m3[period] && tj[period]) return m3[period] / tj[period] / 1000;
+  // fallback: nearest period with both values, else typical 39 500 TJ/bcm
+  const ps = Object.keys(m3).filter(p => tj[p]).sort();
+  if (ps.length) { const p = ps.filter(x => x <= period).pop() || ps[0]; return m3[p] / tj[p] / 1000; }
+  return 1 / 39500;
+}
+
+function annualTable(geo) {
+  const src = RAW.annual.geo[geo]?.TJ_GCV || {};
+  const years = RAW.annual.periods.filter(y => src.IC_CAL?.[y] != null);
+  const rows = [];
+  let prev = null;
+  for (const y of years) {
+    const v = (c) => src[c]?.[y];
+    const raw = {};
+    const allCodes = ['IC_CAL', 'TI_E', 'NRG_E', 'FC_NE', 'FC_IND_E', 'FC_TRA_E', 'FC_OTH_E', ...EHG, ...OTH_CH, ...IND_CH];
+    for (const c of allCodes) raw[c] = v(c);
+    let estimated = false;
+    // Preliminary years: parent published, children not -> split by last year's shares.
+    const fill = (parent, children) => {
+      if (raw[parent] == null) return;
+      const have = children.some(c => raw[c] != null);
+      if (have || !prev || !prev.raw[parent]) return;
+      for (const c of children) raw[c] = (prev.raw[c] || 0) / prev.raw[parent] * raw[parent];
+      estimated = true;
+    };
+    fill('TI_E', EHG); fill('FC_OTH_E', OTH_CH); fill('FC_IND_E', IND_CH);
+    const g = (c) => raw[c] || 0;
+    const power = sum(EHG.map(g));
+    const comp = {
+      power,
+      industry: g('FC_IND_E'),
+      feedstock: g('FC_NE'),
+      households: g('FC_OTH_HH_E'),
+      services: g('FC_OTH_CP_E'),
+      transport: g('FC_TRA_E'),
+      energy: g('NRG_E') + Math.max(0, g('TI_E') - power),
+      otherfc: Math.max(0, g('FC_OTH_E') - g('FC_OTH_HH_E') - g('FC_OTH_CP_E')),
+    };
+    comp.residual = g('IC_CAL') - sum(Object.values(comp));
+    const powerParts = Object.fromEntries(POWER_PARTS.map(p => [p.key, sum(p.codes.map(g))]));
+    const indNamed = IND_PARTS.filter(p => p.codes).map(p => sum(p.codes.map(g)));
+    const indParts = [...indNamed, Math.max(0, g('FC_IND_E') - sum(indNamed))];
+    const row = { year: y, total: g('IC_CAL'), comp, powerParts, indParts, estimated, raw };
+    rows.push(row); prev = row;
+  }
+  // scale to display unit
+  for (const r of rows) {
+    const f = factorFor('annual', geo, r.year, 'IC_CAL');
+    r.f = f;
+  }
+  return rows;
+}
+
+function monthlyTable(geo) {
+  const src = RAW.monthly.geo[geo]?.TJ_GCV || {};
+  const ic = src.IC_CAL_MG || {}, pw = src.TI_EHG_MAP || {};
+  const from = POWER_MONTHLY_FROM[geo] || '0000';
+  const months = RAW.monthly.periods.filter(m => ic[m] != null);
+  return months.map(m => {
+    const f = factorFor('monthly', geo, m, 'IC_CAL_MG');
+    const total = ic[m] * f;
+    const power = (pw[m] != null && m >= from) ? pw[m] * f : null;
+    return { m, y: +m.slice(0, 4), mo: +m.slice(5, 7), total, power, other: power != null ? total - power : null };
+  });
+}
+
+// ---------- chart helpers ----------
+Chart.defaults.color = '#8b949e';
+Chart.defaults.font.family = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
+Chart.defaults.font.size = 11;
+Chart.defaults.borderColor = 'rgba(139,148,158,.14)';
+Chart.defaults.plugins.legend.display = false;
+Chart.defaults.animation = false;
+Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(22,27,34,.96)';
+Chart.defaults.plugins.tooltip.borderColor = '#30363d';
+Chart.defaults.plugins.tooltip.borderWidth = 1;
+Chart.defaults.plugins.tooltip.titleColor = '#f0f3f6';
+Chart.defaults.plugins.tooltip.bodyColor = '#c9d1d9';
+Chart.defaults.plugins.tooltip.padding = 10;
+Chart.defaults.plugins.tooltip.boxPadding = 4;
+
+function alpha(hex, a) { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`; }
+
+function draw(id, cfg) {
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(document.getElementById(id), cfg);
+  return charts[id];
+}
+
+function legend(elId, items, opts = {}) {
+  const el = document.getElementById(elId);
+  el.innerHTML = '';
+  items.forEach((it, i) => {
+    const s = document.createElement('span');
+    const cls = it.style === 'line' ? 'line' : it.style === 'dash' ? 'dash' : '';
+    s.innerHTML = `<i class="${cls}" style="background:${it.color};border-color:${it.color}"></i>${it.label}`;
+    if (opts.hidden && opts.hidden.has(it.key)) s.classList.add('off');
+    if (opts.onToggle) s.addEventListener('click', () => opts.onToggle(it, i));
+    else s.style.cursor = 'default';
+    el.appendChild(s);
+  });
+}
+
+const baseScales = (yTitle, extra = {}) => ({
+  x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 14 }, ...(extra.x || {}) },
+  y: { title: { display: !!yTitle, text: yTitle }, grid: { color: 'rgba(139,148,158,.14)' }, border: { display: false },
+       ticks: { callback: v => fmt(v, Math.abs(v) < 10 && v % 1 ? 1 : 0) }, ...(extra.y || {}) },
+});
+
+function refYears(rows) { return rows.filter(r => r.year >= state.ref[0] && r.year <= state.ref[1]); }
+const refLabel = () => `snitt ${state.ref[0]}–${state.ref[1]}`;
+
+// ---------- renderers ----------
+function renderKPIs(A, M) {
+  const el = document.getElementById('kpis');
+  const u = unitLabel();
+  const tiles = [];
+  // 1) last 12 months vs same 12 months of ref
+  if (M.length >= 12) {
+    const last = M[M.length - 1];
+    const l12 = M.slice(-12), s12 = sum(l12.map(r => r.total));
+    const refAvg = avg(state.ref[0] <= state.ref[1] ? Array.from({ length: state.ref[1] - state.ref[0] + 1 }, (_, i) => {
+      const yr = state.ref[0] + i;
+      const vals = l12.map(r => M.find(x => x.y === yr - (last.y - r.y) && x.mo === r.mo)?.total);
+      return vals.every(v => v != null) ? sum(vals) : null;
+    }) : []);
+    tiles.push({ lbl: 'Siste 12 måneder', val: s12, unit: u,
+      sub: `til og med ${MONTHS_NO[last.mo - 1]} ${last.y}`, d: refAvg ? (s12 / refAvg - 1) * 100 : null, dl: `mot ${refLabel()}` });
+    // 2) last month vs same month last year
+    const ly = M.find(r => r.y === last.y - 1 && r.mo === last.mo);
+    tiles.push({ lbl: `Siste måned (${MONTHS_NO[last.mo - 1]} ${last.y})`, val: last.total, unit: u,
+      sub: '', d: ly ? (last.total / ly.total - 1) * 100 : null, dl: `mot ${MONTHS_NO[last.mo - 1]} ${last.y - 1}` });
+  }
+  // 3) last full annual
+  const full = A.filter(r => !r.estimated);
+  const lastA = A[A.length - 1];
+  if (lastA) {
+    const ref = avg(refYears(A).map(r => r.total * r.f));
+    tiles.push({ lbl: `Årsforbruk ${lastA.year}${lastA.estimated ? ' (foreløpig)' : ''}`, val: lastA.total * lastA.f, unit: u,
+      d: ref ? (lastA.total * lastA.f / ref - 1) * 100 : null, dl: `mot ${refLabel()}` });
+  }
+  // 4) power share last full year
+  const lf = full[full.length - 1];
+  if (lf && lf.total) {
+    const sh = lf.comp.power / lf.total * 100;
+    const refSh = avg(refYears(A).map(r => r.comp.power / r.total * 100));
+    tiles.push({ lbl: `Andel til kraft og varme (${lf.year})`, val: sh, unit: '%', dec: 0,
+      sub: `${refLabel()}: ${fmt(refSh, 0)} %`, d: null });
+  }
+  el.innerHTML = tiles.map(t => `<div class="kpi"><div class="lbl">${t.lbl}</div>
+    <div class="val">${fmt(t.val, t.dec)}<small>${t.unit}</small></div>
+    <div class="sub">${t.d != null ? `<span class="delta ${t.d < 0 ? 'neg' : 'pos'}">${fmtPct(t.d)}</span> ${t.dl}` : (t.sub || '')}</div></div>`).join('');
+}
+
+function prelimAnnotations(A, labels) {
+  const est = A.filter(r => r.estimated);
+  const ann = {};
+  est.forEach((r, i) => {
+    const idx = labels.indexOf(r.year);
+    ann['p' + i] = { type: 'box', xMin: idx - 0.5, xMax: idx + 0.5, backgroundColor: 'rgba(240,243,246,.05)', borderWidth: 0,
+      label: { display: true, content: 'foreløpig', position: { x: 'center', y: 'start' }, color: '#8b949e', font: { size: 10 } } };
+  });
+  return ann;
+}
+
+function renderAnnual(A) {
+  const labels = A.map(r => r.year);
+  const pct = state.annualMode === 'pct';
+  const ds = COMPONENTS.map(c => ({
+    label: c.label, key: c.key,
+    data: A.map(r => pct ? r.comp[c.key] / r.total * 100 : r.comp[c.key] * r.f),
+    backgroundColor: alpha(c.color, .85), hidden: state.hidden.annual.has(c.key),
+  }));
+  draw('cAnnual', {
+    type: 'bar',
+    data: { labels, datasets: ds.map(d => ({ ...d, barPercentage: 1, categoryPercentage: .92, borderRadius: 0 })) },
+    options: {
+      maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      scales: { ...baseScales(pct ? '% av forbruk' : unitLabel(), { x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 10 } } }),
+                // min 0: a small negative residual would otherwise push the axis to -1000
+                y: { ...baseScales(pct ? '% av forbruk' : unitLabel()).y, stacked: true, min: 0, max: pct ? 100 : undefined } },
+      plugins: {
+        annotation: { annotations: prelimAnnotations(A, labels) },
+        tooltip: { itemSort: (a, b) => b.datasetIndex - a.datasetIndex,
+          callbacks: {
+            title: (it) => { const r = A[it[0].dataIndex]; return `${r.year}${r.estimated ? ' (foreløpig, fordeling delvis estimert)' : ''}`; },
+            label: (c) => ` ${c.dataset.label}: ${fmt(c.parsed.y, pct ? 1 : undefined)} ${pct ? '%' : unitLabel()}`,
+            footer: (it) => { const r = A[it[0].dataIndex]; return `Totalt: ${fmt(r.total * r.f)} ${unitLabel()}`; },
+          } },
+      },
+    },
+  });
+  legend('lgAnnual', COMPONENTS, { hidden: state.hidden.annual, onToggle: (it) => {
+    state.hidden.annual.has(it.key) ? state.hidden.annual.delete(it.key) : state.hidden.annual.add(it.key);
+    renderAnnual(A);
+  } });
+  const est = A.filter(r => r.estimated).map(r => r.year);
+  document.getElementById('prelimNote').textContent = est.length
+    ? `${est.join(', ')}: foreløpige tall fra Eurostat. Totalene er publisert, men deler av sektorfordelingen er estimert med forrige års andeler.` : '';
+  document.getElementById('annualTitle').textContent = `Gassforbruk etter anvendelse, ${GEO_NAMES[state.geo]} ${A[0]?.year}–${A[A.length - 1]?.year}`;
+
+  // table
+  const yrs = A.slice().reverse();
+  const head = `<tr><th>${unitLabel()}</th>${yrs.map(r => `<th>${r.year}${r.estimated ? '*' : ''}</th>`).join('')}</tr>`;
+  const body = COMPONENTS.map(c => `<tr><td>${c.label}</td>${yrs.map(r => `<td>${fmt(r.comp[c.key] * r.f, 1)}</td>`).join('')}</tr>`).join('')
+    + `<tr><td><b>Totalt</b></td>${yrs.map(r => `<td><b>${fmt(r.total * r.f, 1)}</b></td>`).join('')}</tr>`;
+  document.getElementById('tblAnnual').innerHTML = `<table>${head}${body}</table>`;
+}
+
+function renderChange(A) {
+  const sel = document.getElementById('changeYear');
+  const yrs = A.map(r => r.year).filter(y => y > state.ref[1]).reverse();
+  const prevSel = sel.value;
+  sel.innerHTML = yrs.map(y => { const r = A.find(x => x.year === y); return `<option value="${y}">${y}${r.estimated ? ' (forel.)' : ''}</option>`; }).join('');
+  const lastFull = A.filter(r => !r.estimated && r.year > state.ref[1]).pop();
+  sel.value = yrs.includes(prevSel) ? prevSel : (lastFull ? lastFull.year : yrs[0]);
+  const year = sel.value;
+  const r = A.find(x => x.year === year);
+  const ref = refYears(A);
+  if (!r || !ref.length) { if (charts.cChange) charts.cChange.destroy(); return; }
+  const items = COMPONENTS.map(c => {
+    const base = avg(ref.map(x => x.comp[c.key] * x.f));
+    const now = r.comp[c.key] * r.f;
+    return { label: c.label, d: now - base, pct: base ? (now / base - 1) * 100 : null, base, now };
+  }).sort((a, b) => a.d - b.d);
+  const totBase = avg(ref.map(x => x.total * x.f)), totNow = r.total * r.f;
+  document.getElementById('changeTitle').textContent = `Endring per sektor: ${year} mot ${refLabel()}`;
+  document.getElementById('changeDesc').textContent =
+    `Totalt ${fmt(totNow)} ${unitLabel()} mot ${fmt(totBase)} (${fmtPct((totNow / totBase - 1) * 100)}). Hvilke anvendelser forklarer endringen?`;
+  draw('cChange', {
+    type: 'bar',
+    data: { labels: items.map(i => i.label), datasets: [{ data: items.map(i => i.d),
+      backgroundColor: items.map(i => i.d < 0 ? alpha('#3987e5', .85) : alpha('#d95926', .85)), borderRadius: 4, borderSkipped: false, barPercentage: .7 }] },
+    options: {
+      indexAxis: 'y', maintainAspectRatio: false,
+      scales: { x: { grid: { color: 'rgba(139,148,158,.14)' }, border: { display: false }, title: { display: true, text: `Endring, ${unitLabel()}` },
+                     ticks: { callback: v => fmt(v, 0) } },
+                y: { grid: { display: false }, ticks: { color: '#c9d1d9' } } },
+      plugins: { tooltip: { callbacks: {
+        label: (c) => { const i = items[c.dataIndex]; return [` Endring: ${i.d > 0 ? '+' : ''}${fmt(i.d)} ${unitLabel()} (${fmtPct(i.pct)})`,
+          ` ${year}: ${fmt(i.now)}   ${refLabel()}: ${fmt(i.base)}`]; } } } },
+    },
+  });
+}
+
+function renderIndex(A) {
+  const ref = refYears(A);
+  document.getElementById('indexDesc').textContent = `Hver sektor indeksert til ${refLabel()} = 100. Viser hvilke anvendelser som faller eller vokser raskest, uavhengig av størrelse. Klikk i forklaringen for å vise flere.`;
+  const labels = A.map(r => r.year);
+  const items = COMPONENTS.filter(c => c.key !== 'residual');
+  const ds = items.map(c => {
+    const base = avg(ref.map(x => x.comp[c.key]));
+    return { label: c.label, key: c.key, data: A.map(r => base ? r.comp[c.key] / base * 100 : null),
+      borderColor: c.color, backgroundColor: c.color, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, tension: .15,
+      hidden: state.hidden.index.has(c.key),
+      segment: { borderDash: (ctx) => A[ctx.p1DataIndex]?.estimated ? [4, 3] : undefined } };
+  });
+  draw('cIndex', {
+    type: 'line', data: { labels, datasets: ds },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      scales: baseScales('Indeks'),
+      plugins: { annotation: { annotations: { ref: { type: 'line', yMin: 100, yMax: 100, borderColor: 'rgba(201,209,217,.4)', borderWidth: 1, borderDash: [3, 3] } } },
+        tooltip: { callbacks: { label: (c) => ` ${c.dataset.label}: ${fmt(c.parsed.y, 0)}` } } } },
+  });
+  legend('lgIndex', items.map(c => ({ ...c, style: 'line' })), { hidden: state.hidden.index, onToggle: (it) => {
+    state.hidden.index.has(it.key) ? state.hidden.index.delete(it.key) : state.hidden.index.add(it.key);
+    renderIndex(A);
+  } });
+}
+
+function stackedAnnual(id, A, parts, getter, lgId) {
+  const labels = A.map(r => r.year);
+  draw(id, {
+    type: 'bar',
+    data: { labels, datasets: parts.map((p, i) => ({ label: p.label, data: A.map(r => getter(r, p, i) * r.f),
+      backgroundColor: alpha(p.color, .85), barPercentage: 1, categoryPercentage: .9 })) },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      scales: { x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 10 } },
+                y: { ...baseScales(unitLabel()).y, stacked: true } },
+      plugins: { annotation: { annotations: prelimAnnotations(A, labels) },
+        tooltip: { itemSort: (a, b) => b.datasetIndex - a.datasetIndex, callbacks: {
+          label: (c) => ` ${c.dataset.label}: ${fmt(c.parsed.y)} ${unitLabel()}`,
+          footer: (it) => `Sum: ${fmt(sum(it.map(x => x.parsed.y)))} ${unitLabel()}` } } } },
+  });
+  legend(lgId, parts);
+}
+
+function renderMonthly(M) {
+  const lastY = M[M.length - 1].y;
+  const lastMo = M[M.length - 1].mo;
+  const start = state.range >= 99 ? M[0].m : `${lastY - state.range}-${String(lastMo).padStart(2, '0')}`;
+  const R = M.filter(r => r.m > start);
+  const labels = R.map(r => `${MONTHS_NO[r.mo - 1]} ${String(r.y).slice(2)}`);
+  const get = { power: r => r.power, other: r => r.other, undiv: r => r.power == null ? r.total : null };
+  draw('cMonthly', {
+    type: 'bar',
+    data: { labels, datasets: MONTH_SERIES.map(s => ({ label: s.label, data: R.map(get[s.key]),
+      backgroundColor: alpha(s.color, .85), barPercentage: 1, categoryPercentage: .88 })) },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      scales: { x: { stacked: true, grid: { display: false }, ticks: { maxRotation: 0, autoSkipPadding: 12 } },
+                y: { ...baseScales(unitLabel()).y, stacked: true } },
+      plugins: { tooltip: { filter: (c) => c.parsed.y != null, itemSort: (a, b) => b.datasetIndex - a.datasetIndex, callbacks: {
+        title: (it) => { const r = R[it[0].dataIndex]; return `${MONTHS_NO[r.mo - 1]} ${r.y}`; },
+        label: (c) => ` ${c.dataset.label}: ${fmt(c.parsed.y)} ${unitLabel()}`,
+        footer: (it) => { const r = R[it[0].dataIndex]; const ly = M.find(x => x.y === r.y - 1 && x.mo === r.mo);
+          return [`Totalt: ${fmt(r.total)} ${unitLabel()}`, ly ? `Mot året før: ${fmtPct((r.total / ly.total - 1) * 100)}` : ''].filter(Boolean); } } } } },
+  });
+  const present = MONTH_SERIES.filter(s => R.some(r => get[s.key](r) != null));
+  legend('lgMonthly', present);
+}
+
+function renderSeason(M) {
+  const key = state.season;
+  const val = (r) => r ? r[key] : null;
+  const lastY = M[M.length - 1].y;
+  const byYM = new Map(M.map(r => [`${r.y}-${r.mo}`, r]));
+  const refYs = []; for (let y = state.ref[0]; y <= state.ref[1]; y++) refYs.push(y);
+  const refVals = Array.from({ length: 12 }, (_, i) => refYs.map(y => val(byYM.get(`${y}-${i + 1}`))).filter(v => v != null));
+  const hasRef = refVals.some(a => a.length);
+  const mean = refVals.map(a => a.length ? avg(a) : null);
+  const lo = refVals.map(a => a.length ? Math.min(...a) : null), hi = refVals.map(a => a.length ? Math.max(...a) : null);
+  const yearLine = (y, color, width, dash) => ({ label: String(y), data: Array.from({ length: 12 }, (_, i) => val(byYM.get(`${y}-${i + 1}`)) ?? null),
+    borderColor: color, backgroundColor: color, borderWidth: width, borderDash: dash, pointRadius: 0, pointHoverRadius: 4, tension: .2, spanGaps: false });
+  const ds = [];
+  if (hasRef) {
+    ds.push({ label: `Spenn ${state.ref[0]}–${state.ref[1]}`, data: hi, borderWidth: 0, pointRadius: 0, backgroundColor: 'rgba(139,148,158,.16)', fill: '+1', tension: .2 });
+    ds.push({ label: '_lo', data: lo, borderWidth: 0, pointRadius: 0, fill: false, tension: .2 });
+    ds.push({ label: `Snitt ${state.ref[0]}–${state.ref[1]}`, data: mean, borderColor: '#8b949e', borderWidth: 2, borderDash: [5, 4], pointRadius: 0, tension: .2 });
+  }
+  ds.push(yearLine(lastY - 2, C[6], 1.5));
+  ds.push(yearLine(lastY - 1, C[1], 2));
+  ds.push(yearLine(lastY, C[0], 2.5));
+  const anyData = ds.some(d => !d.label.startsWith('_') && d.data.some(v => v != null));
+  const nm = { total: 'totalt forbruk', power: 'gass til kraft- og varmeverk', other: 'øvrig forbruk' }[key];
+  document.getElementById('seasonDesc').textContent = anyData
+    ? `Månedlig ${nm} for de siste årene mot ${refLabel()} (grått bånd = laveste–høyeste måned i referanseperioden).`
+    : 'Ingen kraftfordeling tilgjengelig for dette området.';
+  draw('cSeason', {
+    type: 'line', data: { labels: MONTHS_NO, datasets: ds },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      scales: baseScales(unitLabel()),
+      plugins: { tooltip: { filter: (c) => !c.dataset.label.startsWith('_') && c.parsed.y != null, callbacks: {
+        label: (c) => c.dataset.label.startsWith('Spenn') ? ` Spenn: ${fmt(lo[c.dataIndex])}–${fmt(hi[c.dataIndex])}` : ` ${c.dataset.label}: ${fmt(c.parsed.y)} ${unitLabel()}` } } } },
+  });
+  const lg = [{ label: String(lastY), color: C[0], style: 'line' }, { label: String(lastY - 1), color: C[1], style: 'line' }, { label: String(lastY - 2), color: C[6], style: 'line' }];
+  if (hasRef) lg.push({ label: `Snitt ${state.ref[0]}–${state.ref[1]}`, color: '#8b949e', style: 'dash' }, { label: 'Spenn', color: 'rgba(139,148,158,.35)' });
+  legend('lgSeason', lg);
+}
+
+function renderDeviation(M) {
+  const byYM = new Map(M.map(r => [`${r.y}-${r.mo}`, r]));
+  const refYs = []; for (let y = state.ref[0]; y <= state.ref[1]; y++) refYs.push(y);
+  const refMean = (key, mo) => avg(refYs.map(y => byYM.get(`${y}-${mo}`)?.[key]).filter(v => v != null));
+  const startY = Math.max(state.ref[1] + 1, M[M.length - 1].y - 5);
+  const R = M.filter(r => r.y >= startY);
+  const series = [
+    { key: 'total', label: 'Totalt', color: '#c9d1d9' },
+    { key: 'power', label: 'Kraft- og varmeverk', color: C[0] },
+    { key: 'other', label: 'Øvrig forbruk', color: C[2] },
+  ];
+  const ds = series.map(s => ({ label: s.label, borderColor: s.color, backgroundColor: s.color, borderWidth: s.key === 'total' ? 2.5 : 2,
+    pointRadius: 0, pointHoverRadius: 4, tension: .2,
+    data: R.map(r => { const b = refMean(s.key, r.mo); return (r[s.key] != null && b) ? (r[s.key] / b - 1) * 100 : null; }) }))
+    .filter(d => d.data.some(v => v != null));
+  document.getElementById('devDesc').textContent = `Prosentvis avvik fra samme kalendermåned i ${refLabel()}. Fjerner sesongen, men ikke værforskjeller – kalde vintre gir høyere forbruk.`;
+  draw('cDev', {
+    type: 'line', data: { labels: R.map(r => `${MONTHS_NO[r.mo - 1]} ${String(r.y).slice(2)}`), datasets: ds },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      scales: { ...baseScales('%'), y: { ...baseScales('%').y, ticks: { callback: v => fmt(v, 0) + ' %' } } },
+      plugins: { annotation: { annotations: { z: { type: 'line', yMin: 0, yMax: 0, borderColor: 'rgba(201,209,217,.45)', borderWidth: 1 } } },
+        tooltip: { callbacks: { title: (it) => { const r = R[it[0].dataIndex]; return `${MONTHS_NO[r.mo - 1]} ${r.y}`; },
+          label: (c) => ` ${c.dataset.label}: ${fmtPct(c.parsed.y)}` } } } },
+  });
+  legend('lgDev', series.filter(s => ds.some(d => d.label === s.label)).map(s => ({ ...s, style: 'line' })));
+}
+
+function renderRolling(M, A) {
+  const roll = (key) => M.map((r, i) => {
+    if (i < 11) return null;
+    const w = M.slice(i - 11, i + 1);
+    if (w[0].y * 12 + w[0].mo !== r.y * 12 + r.mo - 11) return null; // gap in months
+    const v = w.map(x => x[key]);
+    return v.every(x => x != null) ? sum(v) : null;
+  });
+  const labels = M.map(r => `${MONTHS_NO[r.mo - 1]} ${r.y}`);
+  const series = [
+    { key: 'total', label: 'Totalt', color: '#c9d1d9' },
+    { key: 'other', label: 'Øvrig forbruk', color: C[2] },
+    { key: 'power', label: 'Kraft- og varmeverk', color: C[0] },
+  ];
+  const ds = series.map(s => ({ label: s.label, data: roll(s.key), borderColor: s.color, backgroundColor: s.color,
+    borderWidth: s.key === 'total' ? 2.5 : 2, pointRadius: 0, pointHoverRadius: 4, tension: .1 }));
+  draw('cRolling', {
+    type: 'line', data: { labels, datasets: ds },
+    options: { maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
+      scales: { ...baseScales(unitLabel() + ' / 12 mnd'), y: { ...baseScales(unitLabel() + ' / 12 mnd').y, beginAtZero: true } },
+      plugins: { tooltip: { filter: (c) => c.parsed.y != null, callbacks: { label: (c) => ` ${c.dataset.label}: ${fmt(c.parsed.y)} ${unitLabel()}` } } } },
+  });
+  legend('lgRolling', series.filter((s, i) => ds[i].data.some(v => v != null)).map(s => ({ ...s, style: 'line' })));
+}
+
+function csvAnnual(A) {
+  const head = ['år', 'foreløpig', ...COMPONENTS.map(c => c.label), 'totalt'].join(';');
+  const lines = A.map(r => [r.year, r.estimated ? 'ja' : '', ...COMPONENTS.map(c => (r.comp[c.key] * r.f).toFixed(2)), (r.total * r.f).toFixed(2)].join(';'));
+  const blob = new Blob(['﻿' + [head, ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `gassforbruk_${state.geo}_${state.unit}.csv`;
+  a.click();
+}
+
+// ---------- orchestration ----------
+let A = [], M = [];
+function renderAll() {
+  A = annualTable(state.geo);
+  M = monthlyTable(state.geo);
+  renderKPIs(A, M);
+  renderAnnual(A);
+  renderChange(A);
+  renderIndex(A);
+  stackedAnnual('cPower', A, POWER_PARTS, (r, p) => r.powerParts[p.key], 'lgPower');
+  stackedAnnual('cIndustry', A, IND_PARTS, (r, p, i) => r.indParts[i], 'lgIndustry');
+  if (M.length) { renderMonthly(M); renderSeason(M); renderDeviation(M); renderRolling(M, A); }
+}
+
+function seg(id, onPick) {
+  document.getElementById(id).addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    [...e.currentTarget.children].forEach(x => x.classList.toggle('active', x === b));
+    onPick(b.dataset.v);
+  });
+}
+
+function wire() {
+  const gs = document.getElementById('geoSel');
+  gs.innerHTML = RAW.geos.filter(g => RAW.annual.geo[g]).map(g => `<option value="${g}">${GEO_NAMES[g] || g}</option>`).join('');
+  gs.value = state.geo;
+  gs.addEventListener('change', () => { state.geo = gs.value; renderAll(); });
+  document.getElementById('refSel').addEventListener('change', (e) => { state.ref = e.target.value.split('-').map(Number); renderAll(); });
+  seg('unitSeg', (v) => { state.unit = v; renderAll(); });
+  seg('annualMode', (v) => { state.annualMode = v; renderAnnual(A); });
+  seg('rangeSeg', (v) => { state.range = +v; renderMonthly(M); });
+  seg('seasonSeg', (v) => { state.season = v; renderSeason(M); });
+  document.getElementById('changeYear').addEventListener('change', () => renderChange(A));
+  document.querySelectorAll('.tbl-toggle[data-t]').forEach(b => b.addEventListener('click', () => {
+    const el = document.getElementById(b.dataset.t); el.classList.toggle('open');
+    b.textContent = el.classList.contains('open') ? 'Skjul tabell' : 'Vis tabell';
+  }));
+  document.getElementById('csvAnnual').addEventListener('click', () => csvAnnual(A));
+}
+
+fetch(DATA_URL, { cache: 'no-cache' })
+  .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+  .then(d => {
+    RAW = d;
+    const app = document.getElementById('app');
+    app.innerHTML = '';
+    app.appendChild(document.getElementById('tpl').content.cloneNode(true));
+    wire();
+    renderAll();
+    const lastM = d.monthly.periods.filter(p => d.monthly.geo.EU27_2020?.TJ_GCV?.IC_CAL_MG?.[p] != null).pop();
+    document.getElementById('stamp').textContent =
+      `Data hentet ${new Date(d.updatedAt).toLocaleString('nb-NO', { dateStyle: 'medium', timeStyle: 'short' })}. ` +
+      `Eurostat oppdatert: årlig ${d.annual.eurostatUpdated?.slice(0, 10) || '–'}, månedlig ${d.monthly.eurostatUpdated?.slice(0, 10) || '–'}. ` +
+      `Siste måned (EU27): ${lastM || '–'}.`;
+  })
+  .catch(e => { document.getElementById('app').innerHTML = `<div class="error">Kunne ikke laste data (${e.message}).</div>`; console.error(e); });
+</script>
+</body>
+</html>
