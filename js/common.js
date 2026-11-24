@@ -68,7 +68,10 @@ function stackedBars(id, labels, series, value, opts = {}) {
   return draw(id, {
     type: 'bar',
     data: { labels, datasets: series.map(s => ({
-      label: s.label, key: s.key, data: value(s), backgroundColor: alpha(s.color, .87),
+      label: s.label, key: s.key, data: value(s),
+      // opts.est: per-bar booleans; estimated bars are drawn pale with a solid outline
+      backgroundColor: opts.est ? opts.est.map(e => alpha(s.color, e ? .35 : .87)) : alpha(s.color, .87),
+      borderColor: s.color, borderWidth: opts.est ? opts.est.map(e => e ? 1.5 : 0) : 0,
       hidden: opts.hidden?.has(s.key), barPercentage: 1, categoryPercentage: opts.gap ?? .9 })) },
     options: {
       maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
@@ -111,7 +114,8 @@ function seg(id, onPick) {
 function tableToggle() {
   document.querySelectorAll('.tbl-toggle[data-t]').forEach(b => b.addEventListener('click', () => {
     const el = document.getElementById(b.dataset.t); el.classList.toggle('open');
-    b.textContent = el.classList.contains('open') ? 'Skjul tabell' : 'Vis tabell';
+    b.dataset.label ??= b.textContent;
+    b.textContent = el.classList.contains('open') ? b.dataset.label.replace(/^Vis/, 'Skjul') : b.dataset.label;
   }));
 }
 
