@@ -107,6 +107,10 @@
   footer ul { padding-left: 1.1rem; }
   footer li { margin-bottom: .2rem; }
 
+  .nav { display: flex; flex-wrap: wrap; gap: .3rem 1.1rem; font-size: .8rem; margin-bottom: 1rem; }
+  .nav a { color: var(--muted); }
+  .nav a.cur { color: var(--text-strong); font-weight: 600; }
+
   @media (max-width: 860px) {
     .kpis { grid-template-columns: repeat(2, 1fr); }
     .grid2 { grid-template-columns: 1fr; }
@@ -121,6 +125,11 @@
 </style>
 </head>
 <body>
+<nav class="nav">
+  <a href="gasforbruk.html" class="cur">Gassforbruk</a>
+  <a href="gassimport.html">Gassimport</a>
+  <a href="elektrisitet.html">Kraftproduksjon</a>
+</nav>
 <header>
   <h1>Gassforbruk i Europa</h1>
   <p class="subtitle">Hvor stort er gassforbruket, hva brukes gassen til, og hvordan utvikler sektorene seg? Årlige energibalanser fra 1990 og månedstall frem til siste publiserte måned, fra Eurostat.</p>

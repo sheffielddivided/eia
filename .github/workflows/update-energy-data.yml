@@ -1,0 +1,65 @@
+name: Update Eurostat + gas flow data
+
+on:
+  schedule:
+    - cron: '30 3 * * *'   # daily. Eurostat releases on irregular dates, and
+                            # ENTSOG/ALSI publish the previous gas day each
+                            # morning, so one daily run keeps all pages fresh
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Eurostat gas consumption (gasforbruk.html)
+        continue-on-error: true
+        run: python3 scripts/fetch-eurostat-gas.py
+
+      - name: Eurostat gas imports by origin (gassimport.html)
+        continue-on-error: true
+        run: python3 scripts/fetch-eurostat-gas-imports.py
+
+      - name: Eurostat electricity by source (elektrisitet.html)
+        continue-on-error: true
+        run: python3 scripts/fetch-eurostat-electricity.py
+
+      - name: Daily gas flows, ENTSOG + ALSI (gassimport.html)
+        continue-on-error: true
+        run: python3 scripts/fetch-gas-flows.py
+
+      - name: Commit if data changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          FILES="data/eurostat/gas_consumption.json data/eurostat/gas_imports.json data/eurostat/electricity.json data/gas_flows.json"
+          # updatedAt changes on every run; revert files where nothing else changed
+          for f in $FILES; do
+            git diff --quiet -- "$f" && continue
+            python3 - "$f" <<'EOF' || git checkout -- "$f"
+          import json, subprocess, sys
+          f = sys.argv[1]
+          old = subprocess.run(['git', 'show', f'HEAD:{f}'], capture_output=True, text=True)
+          if old.returncode != 0:
+              sys.exit(0)  # new file
+          a = json.loads(old.stdout); b = json.load(open(f))
+          a.pop('updatedAt', None); b.pop('updatedAt', None)
+          sys.exit(0 if a != b else 1)
+          EOF
+          done
+          git add $FILES
+          if git diff --staged --quiet; then echo "No changes"; exit 0; fi
+          git commit -m "chore: update Eurostat and gas flow data [skip ci]"
+          for i in 1 2 3 4; do
+            git pull --rebase origin main && git push && exit 0
+            sleep $((i * 3))
+          done
+          exit 1
