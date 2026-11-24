@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gassimport til Europa</title>
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="icon" href="apple-touch-icon.png" type="image/png" />
+<link rel="stylesheet" href="css/common.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+</head>
+<body>
+<nav class="nav">
+  <a href="gasforbruk.html">Gassforbruk</a>
+  <a href="gassimport.html" class="cur">Gassimport</a>
+  <a href="elektrisitet.html">Kraftproduksjon</a>
+</nav>
+<header>
+  <h1>Hvor kommer Europas gass fra?</h1>
+  <p class="subtitle">Daglige rørstrømmer inn i EU etter opprinnelse og LNG fra 2021 til i går, og årlig import etter opprinnelsesland fra 1990.</p>
+</header>
+
+<div class="toolbar">
+  <div class="ctl">Enhet
+    <div class="seg" id="unitSeg"><button data-v="twh" class="active">TWh</button><button data-v="bcm">m³</button></div>
+  </div>
+</div>
+
+<div id="app"><div class="loading"><div class="spinner"></div>Laster data …</div></div>
+
+<template id="tpl">
+  <div class="kpis" id="kpis"></div>
+
+  <div class="section-title">Daglig: gass inn i EU, 2021 til i dag</div>
+  <div class="card">
+    <div class="card-head">
+      <h2>Import etter opprinnelse</h2>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <div class="seg" id="aggSeg"><button data-v="d">Dag</button><button data-v="w" class="active">Uke</button><button data-v="m">Måned</button></div>
+        <div class="seg" id="rangeSeg"><button data-v="1">1 år</button><button data-v="2">2 år</button><button data-v="99" class="active">Alt</button></div>
+      </div>
+    </div>
+    <p class="card-desc" id="flowDesc"></p>
+    <div class="chart-wrapper"><canvas id="cFlows"></canvas></div>
+    <div class="legend" id="lgFlows"></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-head"><h2>Andel av importen</h2></div>
+      <p class="card-desc">Rullerende 30-dagers andel av total import (rør + LNG).</p>
+      <div class="chart-wrapper short"><canvas id="cShare"></canvas></div>
+      <div class="legend" id="lgShare"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Russisk gass etter rute</h2></div>
+      <p class="card-desc">Rørgass fra Russland per rute, månedssnitt. Russisk LNG kommer i tillegg, men kan ikke skilles ut daglig (se årstallene under).</p>
+      <div class="chart-wrapper short"><canvas id="cRussia"></canvas></div>
+      <div class="legend" id="lgRussia"></div>
+    </div>
+  </div>
+
+  <div class="section-gap"></div>
+  <div class="card">
+    <div class="card-head"><h2>Total import per uke, år for år</h2>
+      <div class="seg" id="yoySeg"><button data-v="total" class="active">Totalt</button><button data-v="NO">Norge</button><button data-v="LNG">LNG</button><button data-v="RU">Russland</button></div>
+    </div>
+    <p class="card-desc">Ukesnitt per år. Viser om importen nå ligger over eller under tidligere år på samme tid av året.</p>
+    <div class="chart-wrapper short"><canvas id="cYoy"></canvas></div>
+    <div class="legend" id="lgYoy"></div>
+  </div>
+
+  <div class="section-title">Årlig: import etter opprinnelsesland, 1990–</div>
+  <div class="card">
+    <div class="card-head">
+      <h2 id="annualTitle">Gassforsyning etter opprinnelse</h2>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+        <select id="geoSel"></select>
+        <div class="seg" id="annualMode"><button data-v="abs" class="active">Volum</button><button data-v="pct">Andel</button></div>
+      </div>
+    </div>
+    <p class="card-desc">Egenproduksjon pluss import, etter opprinnelsesland og fordelt på rør og LNG der det er relevant. Andel regnes av seriene som vises; skjul «Egenproduksjon» for å få importandeler. For enkeltland kommer en del gass «via andre EU-land», og den egentlige opprinnelsen er da ukjent.</p>
+    <div class="chart-wrapper"><canvas id="cAnnual"></canvas></div>
+    <div class="legend" id="lgAnnual"></div>
+    <button class="tbl-toggle" data-t="tblAnnual">Vis tabell</button><button class="tbl-toggle" id="csvAnnual">Last ned CSV</button>
+    <div class="tbl-wrap" id="tblAnnual"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h2 id="lngTitle">LNG-import etter opprinnelse</h2></div>
+    <p class="card-desc">Flytende naturgass etter landet der gassen ble skipet fra.</p>
+    <div class="chart-wrapper short"><canvas id="cLng"></canvas></div>
+    <div class="legend" id="lgLng"></div>
+  </div>
+</template>
+
+<footer>
+  <div id="stamp"></div>
+  <h3>Kilder</h3>
+  <ul>
+    <li>Daglige rørstrømmer: <a href="https://transparency.entsog.eu" target="_blank" rel="noopener">ENTSOG Transparency Platform</a>, fysisk flyt ved EUs yttergrense. LNG: <a href="https://alsi.gie.eu" target="_blank" rel="noopener">GIE ALSI</a>, utsendt gass fra LNG-terminalene i EU.</li>
+    <li>Årlig: Eurostat <a href="https://ec.europa.eu/eurostat/databrowser/view/nrg_ti_gas/default/table" target="_blank" rel="noopener">nrg_ti_gas</a> (import etter partnerland, rør og LNG) og <a href="https://ec.europa.eu/eurostat/databrowser/view/nrg_cb_gas/default/table" target="_blank" rel="noopener">nrg_cb_gas</a> (egenproduksjon).</li>
+  </ul>
+  <h3>Metode</h3>
+  <ul>
+    <li>Daglig: summen av fysiske strømmer der rørgass først kommer inn i EU, gruppert etter leverandør. <b>Norge:</b> Dunkerque, Zeebrugge, Emden, Dornum og Baltic Pipe. <b>Russland:</b> Nord Stream, transitt via Ukraina (til 1.1.2025), Yamal, TurkStream (Strandzha 2) og grensepunktene mot Finland og Baltikum. <b>Algerie:</b> Mazara (via Tunisia), Almería og Tarifa. <b>Aserbajdsjan:</b> TAP inn i Hellas. <b>Andre rør:</b> Libya (Gela) og Storbritannia (BBL, IZT, Moffat).</li>
+    <li>Kjente svakheter: Yamal-punktet ved den hviterussisk–polske grensen publiseres ikke lenger, så frem til stansen i mai 2022 brukes strømmen videre fra Polen til Tyskland (Mallnow). Polens eget uttak mangler derfor. TurkStream måles ved inngangen til Bulgaria og omfatter også gass som går videre til Serbia. Moffat måles på britisk side og omfatter Nord-Irland. Gass fra Storbritannia er delvis norsk gass sendt via britiske rør.</li>
+    <li>Årlig: Eurostat-tallene gjelder opprinnelsesland, men flere land rapporterer siste transittland. Derfor er Ukraina, Belarus og Serbia regnet som Russland, Tunisia og Marokko som Algerie, og Albania og Georgia som Aserbajdsjan. Tyrkia er slått sammen med «Andre» og er i hovedsak russisk gass via TurkStream. For EU27 er handel mellom medlemslandene holdt utenfor.</li>
+    <li>Omregning: daglige data bruker 1 mill. m³ = 10,55 GWh (brennverdi). Årstallene bruker Eurostats egne m³-tall.</li>
+  </ul>
+</footer>
+
+<script src="js/common.js"></script>
+<script>
+'use strict';
+const KWH_PER_M3 = 10.55;
+const FLOW_GROUPS = [
+  { key: 'NO',  label: 'Norge',                 color: PAL.blue,   routes: ['NO'] },
+  { key: 'RU',  label: 'Russland (rør)',        color: PAL.red,    routes: ['RU_NS', 'RU_UA', 'RU_YA', 'RU_TS', 'RU_BALT'] },
+  { key: 'DZ',  label: 'Algerie (rør)',         color: PAL.green,  routes: ['DZ'] },
+  { key: 'AZ',  label: 'Aserbajdsjan',          color: PAL.violet, routes: ['AZ'] },
+  { key: 'OTH', label: 'Andre rør (UK, Libya)', color: PAL.gray,   routes: ['UK', 'LY'] },
+  { key: 'LNG', label: 'LNG (alle land)',       color: PAL.yellow, routes: [] },
+];
+const RU_ROUTES = [
+  { key: 'RU_NS',   label: 'Nord Stream',             color: PAL.blue },
+  { key: 'RU_UA',   label: 'Via Ukraina',             color: PAL.orange },
+  { key: 'RU_YA',   label: 'Yamal (Belarus/Polen)',   color: PAL.aqua },
+  { key: 'RU_TS',   label: 'TurkStream',              color: PAL.yellow },
+  { key: 'RU_BALT', label: 'Finland og Baltikum',     color: PAL.magenta },
+];
+const ANNUAL_SERIES = [
+  { key: 'prod',   label: 'Egenproduksjon',   color: PAL.grayLight, f: (g, p) => g.prod?.[p] },
+  { key: 'NO',     label: 'Norge',            color: PAL.blue,    f: (g, p) => pl(g, 'NO', p) + ln(g, 'NO', p) },
+  { key: 'RUp',    label: 'Russland (rør)',   color: PAL.red,     f: (g, p) => pl(g, 'RU', p) },
+  { key: 'RUl',    label: 'Russland (LNG)',   color: PAL.magenta, f: (g, p) => ln(g, 'RU', p) },
+  { key: 'DZ',     label: 'Algerie',          color: PAL.green,   f: (g, p) => pl(g, 'DZ', p) + ln(g, 'DZ', p) },
+  { key: 'AZ',     label: 'Aserbajdsjan',     color: PAL.violet,  f: (g, p) => pl(g, 'AZ', p) + ln(g, 'AZ', p) },
+  { key: 'US',     label: 'USA (LNG)',        color: PAL.yellow,  f: (g, p) => ln(g, 'US', p) + pl(g, 'US', p) },
+  { key: 'QA',     label: 'Qatar (LNG)',      color: PAL.aqua,    f: (g, p) => ln(g, 'QA', p) + pl(g, 'QA', p) },
+  { key: 'LNGo',   label: 'Annen LNG',        color: PAL.orange,  f: (g, p) => sumGroups(g.lng, p, ['NO', 'RU', 'DZ', 'AZ', 'US', 'QA', 'EU']) },
+  { key: 'OTH',    label: 'Andre / ikke spesifisert', color: PAL.gray, f: (g, p) => sumGroups(g.pipe, p, ['NO', 'RU', 'DZ', 'AZ', 'US', 'QA', 'EU']) },
+  { key: 'EU',     label: 'Via andre EU-land', color: PAL.grayDark, f: (g, p) => pl(g, 'EU', p) + ln(g, 'EU', p) },
+];
+const LNG_SERIES = [
+  { key: 'US', label: 'USA', color: PAL.yellow }, { key: 'QA', label: 'Qatar', color: PAL.aqua },
+  { key: 'RU', label: 'Russland', color: PAL.magenta }, { key: 'DZ', label: 'Algerie', color: PAL.green },
+  { key: 'NG', label: 'Nigeria', color: PAL.orange }, { key: 'NO', label: 'Norge', color: PAL.blue },
+  { key: 'X', label: 'Andre / ikke spesifisert', color: PAL.gray },
+];
+function pl(g, k, p) { return g.pipe?.[k]?.[p] || 0; }
+function ln(g, k, p) { return g.lng?.[k]?.[p] || 0; }
+function sumGroups(obj, p, exclude) { return sum(Object.keys(obj || {}).filter(k => !exclude.includes(k)).map(k => obj[k][p] || 0)); }
+
+const state = { unit: 'twh', agg: 'w', range: 99, yoy: 'total', geo: 'EU27_2020', mode: 'abs', hidden: new Set() };
+let FLOW, IMP, D = [];
+
+// ---------- daily ----------
+function buildDaily() {
+  const start = new Date(FLOW.start + 'T00:00:00Z');
+  const n = FLOW.lng.length;
+  const routeVal = (rk, i) => sum(FLOW.routes[rk].points.map(p => FLOW.points[p][i]));
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const noReported = FLOW.routes.NO.points.some(p => FLOW.points[p][i] != null);
+    if (!noReported || FLOW.lng[i] == null) continue;
+    const day = new Date(start.getTime() + i * 864e5).toISOString().slice(0, 10);
+    const r = { day, route: {} };
+    for (const rk of Object.keys(FLOW.routes)) r.route[rk] = routeVal(rk, i);
+    r.g = Object.fromEntries(FLOW_GROUPS.map(g => [g.key, g.key === 'LNG' ? FLOW.lng[i] : sum(g.routes.map(rk => r.route[rk]))]));
+    r.total = sum(Object.values(r.g));
+    out.push(r);
+  }
+  return out;
+}
+const rateUnit = () => state.unit === 'twh' ? 'GWh/d' : 'mill. m³/d';
+const rate = (gwh) => state.unit === 'twh' ? gwh : gwh / KWH_PER_M3;
+
+function isoWeek(dstr) {
+  const d = new Date(dstr + 'T00:00:00Z');
+  const day = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - day + 3);
+  const y = d.getUTCFullYear();
+  const w = 1 + Math.round((d - new Date(Date.UTC(y, 0, 4))) / 864e5 / 7 - (((new Date(Date.UTC(y, 0, 4)).getUTCDay() + 6) % 7) - 3) / 7);
+  return [y, w];
+}
+// average per day within buckets
+function bucket(rows, agg) {
+  if (agg === 'd') return rows.map(r => ({ label: r.day, rows: [r] }));
+  const m = new Map();
+  for (const r of rows) {
+    let k;
+    if (agg === 'm') k = r.day.slice(0, 7);
+    else { const [y, w] = isoWeek(r.day); k = `${y}-U${String(w).padStart(2, '0')}`; }
+    if (!m.has(k)) m.set(k, { label: k, first: r.day, rows: [] });
+    m.get(k).rows.push(r);
+  }
+  return [...m.values()];
+}
+const bAvg = (b, f) => sum(b.rows.map(f)) / b.rows.length;
+
+function renderKPIs() {
+  const last = D.slice(-30);
+  const lastDay = last[last.length - 1].day;
+  const shift = (d, y) => `${+d.slice(0, 4) - y}${d.slice(4)}`;
+  const ly = D.filter(r => r.day >= shift(last[0].day, 1) && r.day <= shift(lastDay, 1));
+  const tot = sum(last.map(r => r.total)), totLy = sum(ly.map(r => r.total));
+  const share = (rows, k) => sum(rows.map(r => r.g[k])) / sum(rows.map(r => r.total)) * 100;
+  const y2021 = D.filter(r => r.day.slice(5) >= last[0].day.slice(5) && r.day.slice(5) <= lastDay.slice(5) && r.day.startsWith('2021'));
+  const tiles = [
+    { lbl: 'Import siste 30 dager', val: fmt(state.unit === 'twh' ? tot / 1000 : tot / KWH_PER_M3 / 1000, 1), unit: state.unit === 'twh' ? 'TWh' : 'mrd. m³',
+      sub: ly.length > 20 ? `<span class="delta">${fmtPct((tot / totLy - 1) * 100)}</span> mot samme periode i fjor` : '' },
+    { lbl: 'Norges andel', val: fmt(share(last, 'NO'), 0), unit: '%', sub: ly.length ? `i fjor: <b>${fmt(share(ly, 'NO'), 0)} %</b>` : '' },
+    { lbl: 'LNG-andel', val: fmt(share(last, 'LNG'), 0), unit: '%', sub: ly.length ? `i fjor: <b>${fmt(share(ly, 'LNG'), 0)} %</b>` : '' },
+    { lbl: 'Russisk rørgass, andel', val: fmt(share(last, 'RU'), 0), unit: '%', sub: y2021.length ? `samme periode 2021: <b>${fmt(share(y2021, 'RU'), 0)} %</b>` : '' },
+  ];
+  document.getElementById('kpis').innerHTML = tiles.map(t => `<div class="kpi"><div class="lbl">${t.lbl}</div>
+    <div class="val">${t.val}<small>${t.unit}</small></div><div class="sub">${t.sub}</div></div>`).join('');
+}
+
+function rangeRows() {
+  if (state.range >= 99) return D;
+  const last = D[D.length - 1].day;
+  const cut = `${+last.slice(0, 4) - state.range}${last.slice(4)}`;
+  return D.filter(r => r.day > cut);
+}
+
+function renderFlows() {
+  const B = bucket(rangeRows(), state.agg);
+  const lab = (b) => state.agg === 'm' ? ymLabel(b.label) : state.agg === 'w' ? b.first.slice(2) : b.label.slice(2);
+  stackedBars('cFlows', B.map(lab), FLOW_GROUPS, g => B.map(b => rate(bAvg(b, r => r.g[g.key]))), {
+    yTitle: rateUnit(), unit: rateUnit(), dec: 0, gap: state.agg === 'd' ? 1 : .9,
+    title: (it) => { const b = B[it[0].dataIndex]; return state.agg === 'd' ? b.label : state.agg === 'w' ? `Uke ${b.label.slice(6)} ${b.label.slice(0, 4)} (fra ${b.first})` : ymLong(b.label); },
+    footer: (it) => { const b = B[it[0].dataIndex]; return `Totalt: ${fmt(rate(bAvg(b, r => r.total)), 0)} ${rateUnit()}`; },
+  });
+  legend('lgFlows', FLOW_GROUPS);
+  document.getElementById('flowDesc').textContent =
+    `Gjennomsnittlig flyt per døgn (${rateUnit()}), ${state.agg === 'd' ? 'per dag' : state.agg === 'w' ? 'ukesnitt' : 'månedssnitt'}. Siste dag: ${D[D.length - 1].day}. Norge, Russland, Algerie, Aserbajdsjan og andre er rørgass; LNG er utsendt gass fra terminalene i EU.`;
+}
+
+function renderShare() {
+  const keys = ['NO', 'LNG', 'RU', 'DZ', 'AZ'];
+  const idx = []; for (let i = 29; i < D.length; i++) if (i % 3 === 0 || i === D.length - 1) idx.push(i);
+  const ds = keys.map(k => { const g = FLOW_GROUPS.find(x => x.key === k);
+    return lineDs(g.label, idx.map(i => { const w = D.slice(i - 29, i + 1); return sum(w.map(r => r.g[k])) / sum(w.map(r => r.total)) * 100; }), g.color, 2); });
+  lineChart('cShare', idx.map(i => D[i].day.slice(2, 7)), ds, { yTitle: '%', unit: '%', dec: 1, y: { min: 0, ticks: { callback: v => v + ' %' } },
+    title: (it) => `30 dager til ${D[idx[it[0].dataIndex]].day}` });
+  legend('lgShare', keys.map(k => ({ ...FLOW_GROUPS.find(x => x.key === k), style: 'line' })));
+}
+
+function renderRussia() {
+  const B = bucket(D, 'm');
+  const present = RU_ROUTES.filter(r => B.some(b => bAvg(b, x => x.route[r.key]) > 1));
+  stackedBars('cRussia', B.map(b => ymLabel(b.label)), present, s => B.map(b => rate(bAvg(b, r => r.route[s.key]))), {
+    yTitle: rateUnit(), unit: rateUnit(), dec: 0, title: (it) => ymLong(B[it[0].dataIndex].label),
+    footer: (it) => `Totalt: ${fmt(rate(bAvg(B[it[0].dataIndex], r => r.g.RU)), 0)} ${rateUnit()}`,
+  });
+  legend('lgRussia', present);
+}
+
+function renderYoy() {
+  const k = state.yoy;
+  const val = (r) => k === 'total' ? r.total : r.g[k];
+  const byYear = new Map();
+  for (const r of D) {
+    const [y, w] = isoWeek(r.day);
+    if (!byYear.has(y)) byYear.set(y, new Map());
+    const m = byYear.get(y); if (!m.has(w)) m.set(w, []); m.get(w).push(val(r));
+  }
+  const years = [...byYear.keys()].sort().filter(y => byYear.get(y).size >= 8);  // drop stub ISO years
+  const cols = [PAL.grayDark, PAL.gray, PAL.grayLight, PAL.violet, PAL.orange, PAL.blue];
+  const ds = years.map((y, i) => {
+    const m = byYear.get(y);
+    const c = cols[Math.max(0, cols.length - years.length + i)];
+    return lineDs(String(y), Array.from({ length: 53 }, (_, w) => { const a = m.get(w + 1); return a && a.length >= 4 ? rate(avg(a)) : null; }), c, i === years.length - 1 ? 2.5 : 1.75);
+  });
+  lineChart('cYoy', Array.from({ length: 53 }, (_, i) => `u${i + 1}`), ds, { yTitle: rateUnit(), unit: rateUnit(), dec: 0,
+    title: (it) => `Uke ${it[0].dataIndex + 1}` });
+  legend('lgYoy', years.map((y, i) => ({ label: String(y), color: ds[i].borderColor, style: 'line' })));
+}
+
+// ---------- annual (Eurostat) ----------
+function annualRows() {
+  const g = IMP.annual.geo[state.geo];
+  if (!g) return [];
+  return IMP.annual.periods.map(p => {
+    const f = state.unit === 'twh' ? 1 / 3600 : (g.m3PerTJ?.[p] || 1 / 39500) / 1000;
+    const v = Object.fromEntries(ANNUAL_SERIES.map(s => [s.key, (s.f(g, p) || 0) * f]));
+    return { p, v, f, g };
+  }).filter(r => sum(Object.values(r.v)) > 0);
+}
+function renderAnnual() {
+  const R = annualRows();
+  const unit = state.unit === 'twh' ? 'TWh' : 'mrd. m³';
+  const S = ANNUAL_SERIES.filter(s => R.some(r => r.v[s.key] > 0.05));
+  const visible = S.filter(s => !state.hidden.has(s.key));
+  const pct = state.mode === 'pct';
+  const tot = (r) => sum(visible.map(s => r.v[s.key]));
+  stackedBars('cAnnual', R.map(r => r.p), S, s => R.map(r => pct ? r.v[s.key] / tot(r) * 100 : r.v[s.key]), {
+    hidden: state.hidden, yTitle: pct ? '%' : unit, unit: pct ? '%' : unit, dec: pct ? 1 : undefined, max: pct ? 100 : undefined,
+    footer: (it) => `Sum viste serier: ${fmt(tot(R[it[0].dataIndex]))} ${unit}`,
+  });
+  legend('lgAnnual', S, { hidden: state.hidden, onToggle: (it) => { toggleSet(state.hidden, it.key); renderAnnual(); } });
+  document.getElementById('annualTitle').textContent = `Gassforsyning etter opprinnelse, ${GEO_NAMES[state.geo]} ${R[0]?.p}–${R[R.length - 1]?.p}`;
+  const yrs = R.slice().reverse();
+  document.getElementById('tblAnnual').innerHTML = htmlTable(unit, yrs.map(r => r.p), S.map(s => ({ label: s.label, values: yrs.map(r => r.v[s.key]) })));
+
+  // LNG by origin
+  const L = R.filter(r => r.p >= '2000');
+  const lngVal = (r, k) => {
+    const lng = r.g.lng || {};
+    if (k !== 'X') return (lng[k]?.[r.p] || 0) * r.f;
+    return sum(Object.keys(lng).filter(x => !['US', 'QA', 'RU', 'DZ', 'NG', 'NO', 'EU'].includes(x)).map(x => lng[x][r.p] || 0)) * r.f;
+  };
+  const LS = LNG_SERIES.filter(s => L.some(r => lngVal(r, s.key) > 0.05));
+  stackedBars('cLng', L.map(r => r.p), LS, s => L.map(r => lngVal(r, s.key)), { yTitle: unit, unit,
+    footer: (it) => `Sum LNG: ${fmt(sum(LS.map(s => lngVal(L[it[0].dataIndex], s.key))))} ${unit}` });
+  legend('lgLng', LS);
+  document.getElementById('lngTitle').textContent = `LNG-import etter opprinnelse, ${GEO_NAMES[state.geo]}`;
+}
+
+function renderAll() {
+  renderKPIs(); renderFlows(); renderShare(); renderRussia(); renderYoy(); renderAnnual();
+}
+
+Promise.all(['data/gas_flows.json', 'data/eurostat/gas_imports.json'].map(u => fetch(u, { cache: 'no-cache' }).then(r => {
+  if (!r.ok) throw new Error(`${u}: HTTP ${r.status}`); return r.json(); })))
+  .then(([flow, imp]) => {
+    FLOW = flow; IMP = imp;
+    D = buildDaily();
+    mountTemplate();
+    const gs = document.getElementById('geoSel');
+    gs.innerHTML = imp.geos.filter(g => imp.annual.geo[g]).map(g => `<option value="${g}">${GEO_NAMES[g] || g}</option>`).join('');
+    gs.addEventListener('change', () => { state.geo = gs.value; renderAnnual(); });
+    seg('unitSeg', (v) => { state.unit = v; renderAll(); });
+    seg('aggSeg', (v) => { state.agg = v; renderFlows(); });
+    seg('rangeSeg', (v) => { state.range = +v; renderFlows(); });
+    seg('yoySeg', (v) => { state.yoy = v; renderYoy(); });
+    seg('annualMode', (v) => { state.mode = v; renderAnnual(); });
+    tableToggle();
+    document.getElementById('csvAnnual').addEventListener('click', () => {
+      const R = annualRows();
+      downloadCsv(`gassforsyning_${state.geo}_${state.unit}.csv`, ['år', ...ANNUAL_SERIES.map(s => s.label)], R.map(r => [r.p, ...ANNUAL_SERIES.map(s => r.v[s.key].toFixed(2))]));
+    });
+    renderAll();
+    document.getElementById('stamp').textContent = `Daglige data hentet ${new Date(flow.updatedAt).toLocaleString('nb-NO', { dateStyle: 'medium', timeStyle: 'short' })} (siste dag ${D[D.length - 1].day}). ` +
+      `Eurostat import oppdatert ${imp.annual.eurostatUpdated?.slice(0, 10) || '–'}.`;
+  })
+  .catch(e => { document.getElementById('app').innerHTML = `<div class="error">Kunne ikke laste data (${e.message}).</div>`; console.error(e); });
+</script>
+</body>
+</html>

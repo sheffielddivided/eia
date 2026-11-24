@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kraftproduksjon i Europa</title>
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="icon" href="apple-touch-icon.png" type="image/png" />
+<link rel="stylesheet" href="css/common.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+</head>
+<body>
+<nav class="nav">
+  <a href="gasforbruk.html">Gassforbruk</a>
+  <a href="gassimport.html">Gassimport</a>
+  <a href="elektrisitet.html" class="cur">Kraftproduksjon</a>
+</nav>
+<header>
+  <h1>Kraftproduksjon i Europa etter energikilde</h1>
+  <p class="subtitle">Hvor kommer strømmen fra, og hvordan endrer kraftmiksen seg? Årlig produksjon fra 1990 og månedstall frem til siste publiserte måned, fra Eurostat.</p>
+</header>
+
+<div class="toolbar">
+  <label class="ctl">Område <select id="geoSel"></select></label>
+  <label class="ctl">Referanse
+    <select id="refSel">
+      <option value="2017-2021" selected>Snitt 2017–2021</option>
+      <option value="2015-2019">Snitt 2015–2019</option>
+      <option value="2010-2014">Snitt 2010–2014</option>
+      <option value="1990-1994">Snitt 1990–1994</option>
+    </select>
+  </label>
+</div>
+
+<div id="app"><div class="loading"><div class="spinner"></div>Laster data …</div></div>
+
+<template id="tpl">
+  <div class="kpis" id="kpis"></div>
+
+  <div class="section-title">Årlig: kraftmiksen over tid</div>
+  <div class="card">
+    <div class="card-head">
+      <h2 id="annualTitle">Kraftproduksjon etter energikilde</h2>
+      <div class="seg" id="annualMode"><button data-v="abs" class="active">Volum</button><button data-v="pct">Andel</button></div>
+    </div>
+    <p class="card-desc">Brutto elektrisitetsproduksjon (inkludert kraftverkenes egenforbruk) per energikilde. Vannkraft er uten pumpekraft; pumpekraft ligger i «Annet» sammen med geotermisk kraft, ikke-fornybart avfall og andre brensler. Klikk i forklaringen for å skjule serier.</p>
+    <div class="chart-wrapper"><canvas id="cAnnual"></canvas></div>
+    <div class="legend" id="lgAnnual"></div>
+    <button class="tbl-toggle" data-t="tblAnnual">Vis tabell</button><button class="tbl-toggle" id="csvAnnual">Last ned CSV</button>
+    <div class="tbl-wrap" id="tblAnnual"></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-head"><h2 id="changeTitle">Endring per kilde</h2><select id="changeYear"></select></div>
+      <p class="card-desc" id="changeDesc"></p>
+      <div class="chart-wrapper short"><canvas id="cChange"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Fornybar, fossil og kjernekraft</h2></div>
+      <p class="card-desc">Andel av produksjonen. Fornybar = vann, vind, sol og bioenergi. Fossil = kull, gass og olje.</p>
+      <div class="chart-wrapper short"><canvas id="cBlocks"></canvas></div>
+      <div class="legend" id="lgBlocks"></div>
+    </div>
+  </div>
+
+  <div class="section-title">Månedlig: hva skjer nå?</div>
+  <div class="card">
+    <div class="card-head">
+      <h2>Månedlig produksjon etter energikilde</h2>
+      <div class="seg" id="rangeSeg"><button data-v="2">2 år</button><button data-v="4" class="active">4 år</button><button data-v="99">Alt</button></div>
+    </div>
+    <p class="card-desc">Netto produksjon per måned fra 2017. «Varmekraft, ikke fordelt» er brenselbasert kraft som landet ikke har fordelt på kull, gass, olje og bio (gjelder bl.a. Italia frem til 2021).</p>
+    <div class="chart-wrapper"><canvas id="cMonthly"></canvas></div>
+    <div class="legend" id="lgMonthly"></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-head"><h2>Andel siste 12 måneder</h2></div>
+      <p class="card-desc">Rullerende 12-måneders andel av produksjonen per kilde. Viser trenden måned for måned uten sesongsvingninger. Klikk i forklaringen for å vise flere.</p>
+      <div class="chart-wrapper short"><canvas id="cShare"></canvas></div>
+      <div class="legend" id="lgShare"></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2 id="seasonTitle">Sesongprofil</h2><select id="seasonSrc"></select></div>
+      <p class="card-desc" id="seasonDesc"></p>
+      <div class="chart-wrapper short"><canvas id="cSeason"></canvas></div>
+      <div class="legend" id="lgSeason"></div>
+    </div>
+  </div>
+</template>
+
+<footer>
+  <div id="stamp"></div>
+  <h3>Kilder</h3>
+  <ul>
+    <li>Årlig: Eurostat <a href="https://ec.europa.eu/eurostat/databrowser/view/nrg_bal_peh/default/table" target="_blank" rel="noopener">nrg_bal_peh</a>, brutto elektrisitetsproduksjon etter brensel (1990–).</li>
+    <li>Månedlig: Eurostat <a href="https://ec.europa.eu/eurostat/databrowser/view/nrg_cb_pem/default/table" target="_blank" rel="noopener">nrg_cb_pem</a>, netto produksjon etter brensel (2017–), vanligvis med 2–3 måneders etterslep.</li>
+  </ul>
+  <h3>Metode</h3>
+  <ul>
+    <li>Årstallene er brutto, månedstallene netto. Netto er typisk 4–6 % lavere, mest for kull og kjernekraft. Sammenlign derfor årstall med årstall og månedstall med månedstall.</li>
+    <li>Kull = steinkull, brunkull, torv, oljeskifer og avledede gasser. Bioenergi = fast biomasse, biogass, fornybart avfall og flytende biobrensel.</li>
+    <li>EU27 per måned er summen av medlemslandene. Måneder der færre enn 25 land har rapportert vises ikke.</li>
+  </ul>
+</footer>
+
+<script src="js/common.js"></script>
+<script>
+'use strict';
+const SOURCES = [
+  { key: 'nuclear', label: 'Kjernekraft', color: PAL.violet, block: 'nuc' },
+  { key: 'coal',    label: 'Kull og brunkull', color: PAL.brown, block: 'fos' },
+  { key: 'gas',     label: 'Gass', color: PAL.orange, block: 'fos' },
+  { key: 'oil',     label: 'Olje', color: PAL.red, block: 'fos' },
+  { key: 'thermal', label: 'Varmekraft, ikke fordelt', color: PAL.grayDark, block: 'oth', monthlyOnly: true },
+  { key: 'bio',     label: 'Bioenergi', color: PAL.green, block: 'ren' },
+  { key: 'hydro',   label: 'Vannkraft', color: PAL.blue, block: 'ren' },
+  { key: 'wind',    label: 'Vind', color: PAL.aqua, block: 'ren' },
+  { key: 'solar',   label: 'Sol', color: PAL.yellow, block: 'ren' },
+  { key: 'other',   label: 'Annet', color: PAL.gray, block: 'oth' },
+];
+const BLOCKS = [
+  { key: 'ren', label: 'Fornybar', color: PAL.aqua },
+  { key: 'fos', label: 'Fossil', color: PAL.orange },
+  { key: 'nuc', label: 'Kjernekraft', color: PAL.violet },
+];
+const state = { geo: 'EU27_2020', ref: [2017, 2021], mode: 'abs', range: 4, season: 'gas',
+  hidden: new Set(), shareShown: new Set(['gas', 'coal', 'wind', 'solar', 'nuclear', 'hydro']) };
+let RAW, A = [], M = [];
+
+// rows: {p, total, v:{key: TWh}}
+function rows(block, geo) {
+  const g = RAW[block].geo[geo];
+  if (!g) return [];
+  return Object.keys(g.total).sort().map(p => ({
+    p, total: g.total[p] / 1000,
+    v: Object.fromEntries(SOURCES.map(s => [s.key, (g[s.key]?.[p] || 0) / 1000])),
+  })).filter(r => r.total > 0);
+}
+const blockVal = (r, b) => sum(SOURCES.filter(s => s.block === b).map(s => r.v[s.key]));
+const refRows = () => A.filter(r => +r.p >= state.ref[0] && +r.p <= state.ref[1]);
+const refLabel = () => `snitt ${state.ref[0]}–${state.ref[1]}`;
+const annualSources = () => SOURCES.filter(s => !s.monthlyOnly);
+
+function last12(i, key) { // sum of key over the 12 months ending at index i (consecutive), else null
+  if (i < 11) return null;
+  const w = M.slice(i - 11, i + 1);
+  const a = w[0].p, b = w[11].p;
+  if ((+b.slice(0, 4) * 12 + +b.slice(5)) - (+a.slice(0, 4) * 12 + +a.slice(5)) !== 11) return null;
+  return sum(w.map(r => key === 'total' ? r.total : typeof key === 'function' ? key(r) : r.v[key]));
+}
+
+function renderKPIs() {
+  const t = [];
+  const i = M.length - 1;
+  if (i >= 23) {
+    const tot = last12(i, 'total'), totPrev = last12(i - 12, 'total');
+    const ren = last12(i, r => blockVal(r, 'ren')) / tot * 100, renPrev = last12(i - 12, r => blockVal(r, 'ren')) / totPrev * 100;
+    const fos = last12(i, r => blockVal(r, 'fos')) / tot * 100, fosPrev = last12(i - 12, r => blockVal(r, 'fos')) / totPrev * 100;
+    const gas = last12(i, 'gas'), gasPrev = last12(i - 12, 'gas');
+    const per = `12 mnd til ${ymLong(M[i].p)}`;
+    t.push({ lbl: 'Produksjon siste 12 mnd', val: fmt(tot), unit: 'TWh', sub: `<span class="delta">${fmtPct((tot / totPrev - 1) * 100)}</span> mot året før · ${per}` });
+    t.push({ lbl: 'Fornybarandel siste 12 mnd', val: fmt(ren, 1), unit: '%', sub: `<b>${fmtPp(ren - renPrev)}</b> mot året før` });
+    t.push({ lbl: 'Fossilandel siste 12 mnd', val: fmt(fos, 1), unit: '%', sub: `<b>${fmtPp(fos - fosPrev)}</b> mot året før` });
+    t.push({ lbl: 'Gasskraft siste 12 mnd', val: fmt(gas), unit: 'TWh', sub: `<span class="delta ${gas < gasPrev ? 'neg' : 'pos'}">${fmtPct((gas / gasPrev - 1) * 100)}</span> mot året før` });
+  }
+  document.getElementById('kpis').innerHTML = t.map(x => `<div class="kpi"><div class="lbl">${x.lbl}</div>
+    <div class="val">${x.val}<small>${x.unit}</small></div><div class="sub">${x.sub}</div></div>`).join('');
+}
+
+function renderAnnual() {
+  const pct = state.mode === 'pct';
+  const S = annualSources();
+  stackedBars('cAnnual', A.map(r => r.p), S, s => A.map(r => pct ? r.v[s.key] / r.total * 100 : r.v[s.key]), {
+    hidden: state.hidden, yTitle: pct ? '% av produksjonen' : 'TWh', unit: pct ? '%' : 'TWh', dec: pct ? 1 : undefined, max: pct ? 100 : undefined,
+    footer: (it) => `Totalt: ${fmt(A[it[0].dataIndex].total)} TWh`,
+  });
+  legend('lgAnnual', S, { hidden: state.hidden, onToggle: (it) => { toggleSet(state.hidden, it.key); renderAnnual(); } });
+  document.getElementById('annualTitle').textContent = `Kraftproduksjon etter energikilde, ${GEO_NAMES[state.geo]} ${A[0]?.p}–${A[A.length - 1]?.p}`;
+  const yrs = A.slice().reverse();
+  document.getElementById('tblAnnual').innerHTML = htmlTable('TWh', yrs.map(r => r.p),
+    [...S.map(s => ({ label: s.label, values: yrs.map(r => r.v[s.key]) })), { label: 'Totalt', values: yrs.map(r => r.total), bold: true }]);
+}
+
+function renderChange() {
+  const sel = document.getElementById('changeYear');
+  const yrs = A.map(r => r.p).filter(y => +y > state.ref[1]).reverse();
+  const prev = sel.value;
+  sel.innerHTML = yrs.map(y => `<option>${y}</option>`).join('');
+  sel.value = yrs.includes(prev) ? prev : yrs[0];
+  const r = A.find(x => x.p === sel.value), ref = refRows();
+  if (!r || !ref.length) return;
+  const items = annualSources().map(s => {
+    const base = avg(ref.map(x => x.v[s.key])), now = r.v[s.key];
+    return { label: s.label, d: now - base, pct: base ? (now / base - 1) * 100 : null, base, now };
+  }).sort((a, b) => a.d - b.d);
+  const tb = avg(ref.map(x => x.total));
+  document.getElementById('changeTitle').textContent = `Endring per kilde: ${sel.value} mot ${refLabel()}`;
+  document.getElementById('changeDesc').textContent = `Total produksjon ${fmt(r.total)} TWh mot ${fmt(tb)} (${fmtPct((r.total / tb - 1) * 100)}). Hvilke kilder har vokst, og hvilke er faset ut?`;
+  draw('cChange', {
+    type: 'bar',
+    data: { labels: items.map(i => i.label), datasets: [{ data: items.map(i => i.d), borderRadius: 4, borderSkipped: false, barPercentage: .7,
+      backgroundColor: alpha(PAL.grayLight, .8) }] },  // neutral: source colours already carry identity elsewhere
+    options: { indexAxis: 'y', maintainAspectRatio: false,
+      scales: { x: { ...yAxis('Endring, TWh') }, y: { grid: { display: false }, ticks: { color: '#c9d1d9' } } },
+      plugins: { tooltip: { callbacks: { label: (c) => { const i = items[c.dataIndex];
+        return [` Endring: ${i.d > 0 ? '+' : ''}${fmt(i.d)} TWh (${fmtPct(i.pct)})`, ` ${sel.value}: ${fmt(i.now)}   ${refLabel()}: ${fmt(i.base)}`]; } } } } },
+  });
+}
+
+function renderBlocks() {
+  lineChart('cBlocks', A.map(r => r.p), BLOCKS.map(b => lineDs(b.label, A.map(r => blockVal(r, b.key) / r.total * 100), b.color, 2.5)),
+    { yTitle: '%', unit: '%', dec: 1, y: { min: 0, ticks: { callback: v => v + ' %' } } });
+  legend('lgBlocks', BLOCKS.map(b => ({ ...b, style: 'line' })));
+}
+
+function renderMonthly() {
+  const last = M[M.length - 1];
+  const cut = state.range >= 99 ? '0000' : `${+last.p.slice(0, 4) - state.range}${last.p.slice(4)}`;
+  const R = M.filter(r => r.p > cut);
+  const S = SOURCES.filter(s => R.some(r => r.v[s.key] > 0));
+  stackedBars('cMonthly', R.map(r => ymLabel(r.p)), S, s => R.map(r => r.v[s.key]), {
+    hidden: state.hidden, yTitle: 'TWh', unit: 'TWh', gap: .88,
+    title: (it) => ymLong(R[it[0].dataIndex].p),
+    footer: (it) => { const r = R[it[0].dataIndex]; return `Totalt: ${fmt(r.total)} TWh · fornybar ${fmt(blockVal(r, 'ren') / r.total * 100, 0)} %`; },
+  });
+  legend('lgMonthly', S, { hidden: state.hidden, onToggle: (it) => { toggleSet(state.hidden, it.key); renderMonthly(); renderAnnual(); } });
+}
+
+function renderShare() {
+  const S = SOURCES.filter(s => M.some(r => r.v[s.key] > 0));
+  const idx = M.map((_, i) => i).filter(i => last12(i, 'total') != null);
+  const ds = S.map(s => lineDs(s.label, idx.map(i => last12(i, s.key) / last12(i, 'total') * 100), s.color, 2, { hidden: !state.shareShown.has(s.key) }));
+  lineChart('cShare', idx.map(i => ymLabel(M[i].p)), ds, { yTitle: '%', unit: '%', dec: 1, y: { min: 0, ticks: { callback: v => v + ' %' } },
+    title: (it) => `12 mnd til ${ymLong(M[idx[it[0].dataIndex]].p)}` });
+  const inv = new Set(S.map(s => s.key).filter(k => !state.shareShown.has(k)));
+  legend('lgShare', S.map(s => ({ ...s, style: 'line' })), { hidden: inv, onToggle: (it) => { toggleSet(state.shareShown, it.key); renderShare(); } });
+}
+
+function renderSeason() {
+  const sel = document.getElementById('seasonSrc');
+  const S = SOURCES.filter(s => M.some(r => r.v[s.key] > 0));
+  if (!sel.options.length || sel.dataset.geo !== state.geo) {
+    sel.innerHTML = [{ key: 'total', label: 'All produksjon' }, ...S].map(s => `<option value="${s.key}">${s.label}</option>`).join('');
+    sel.dataset.geo = state.geo;
+    sel.value = S.some(s => s.key === state.season) ? state.season : 'total';
+  }
+  const key = sel.value; state.season = key;
+  const by = new Map(M.map(r => [r.p, key === 'total' ? r.total : r.v[key]]));
+  const lastY = +M[M.length - 1].p.slice(0, 4);
+  const firstY = +M[0].p.slice(0, 4);
+  const val = (y, m) => by.get(`${y}-${String(m).padStart(2, '0')}`) ?? null;
+  const yearsBack = [lastY, lastY - 1, lastY - 2].filter(y => y >= firstY);
+  const refYs = []; for (let y = Math.max(firstY, lastY - 7); y <= lastY - 3; y++) refYs.push(y);
+  const ref = Array.from({ length: 12 }, (_, i) => refYs.map(y => val(y, i + 1)).filter(v => v != null));
+  const ds = [];
+  if (refYs.length) {
+    ds.push(lineDs(`Spenn ${refYs[0]}–${refYs[refYs.length - 1]}`, ref.map(a => a.length ? Math.max(...a) : null), 'rgba(0,0,0,0)', 0, { backgroundColor: 'rgba(139,148,158,.16)', fill: '+1' }));
+    ds.push(lineDs('_lo', ref.map(a => a.length ? Math.min(...a) : null), 'rgba(0,0,0,0)', 0));
+    ds.push(lineDs(`Snitt ${refYs[0]}–${refYs[refYs.length - 1]}`, ref.map(a => avg(a)), '#8b949e', 2, { borderDash: [5, 4] }));
+  }
+  const cols = [PAL.blue, PAL.orange, PAL.violet];
+  yearsBack.forEach((y, i) => ds.push(lineDs(String(y), MONTHS_NO.map((_, m) => val(y, m + 1)), cols[i], i === 0 ? 2.5 : 2)));
+  const name = key === 'total' ? 'all produksjon' : SOURCES.find(s => s.key === key).label.toLowerCase();
+  document.getElementById('seasonDesc').textContent = `Månedlig produksjon for ${name}, siste tre år mot tidligere år (grått bånd = laveste–høyeste måned).`;
+  lineChart('cSeason', MONTHS_NO, ds, { yTitle: 'TWh', unit: 'TWh' });
+  const lg = yearsBack.map((y, i) => ({ label: String(y), color: cols[i], style: 'line' }));
+  if (refYs.length) lg.push({ label: `Snitt ${refYs[0]}–${refYs[refYs.length - 1]}`, color: '#8b949e', style: 'dash' }, { label: 'Spenn', color: 'rgba(139,148,158,.35)' });
+  legend('lgSeason', lg);
+}
+
+function renderAll() {
+  A = rows('annual', state.geo);
+  M = rows('monthly', state.geo);
+  renderKPIs(); renderAnnual(); renderChange(); renderBlocks();
+  if (M.length) { renderMonthly(); renderShare(); renderSeason(); }
+}
+
+loadPage('data/eurostat/electricity.json', (d) => {
+  RAW = d;
+  mountTemplate();
+  const gs = document.getElementById('geoSel');
+  gs.innerHTML = d.geos.filter(g => d.annual.geo[g]).map(g => `<option value="${g}">${GEO_NAMES[g] || g}</option>`).join('');
+  gs.addEventListener('change', () => { state.geo = gs.value; renderAll(); });
+  document.getElementById('refSel').addEventListener('change', (e) => { state.ref = e.target.value.split('-').map(Number); renderAll(); });
+  seg('annualMode', (v) => { state.mode = v; renderAnnual(); });
+  seg('rangeSeg', (v) => { state.range = +v; renderMonthly(); });
+  document.getElementById('changeYear').addEventListener('change', renderChange);
+  document.getElementById('seasonSrc').addEventListener('change', renderSeason);
+  tableToggle();
+  document.getElementById('csvAnnual').addEventListener('click', () => downloadCsv(`kraftproduksjon_${state.geo}.csv`,
+    ['år', ...annualSources().map(s => s.label), 'totalt'], A.map(r => [r.p, ...annualSources().map(s => r.v[s.key].toFixed(2)), r.total.toFixed(2)])));
+  renderAll();
+  const lm = d.monthly.periods.filter(p => d.monthly.geo.EU27_2020?.total?.[p] != null).pop();
+  document.getElementById('stamp').textContent = `Data hentet ${new Date(d.updatedAt).toLocaleString('nb-NO', { dateStyle: 'medium', timeStyle: 'short' })}. ` +
+    `Eurostat oppdatert: årlig ${d.annual.eurostatUpdated?.slice(0, 10) || '–'}, månedlig ${d.monthly.eurostatUpdated?.slice(0, 10) || '–'}. Siste måned (EU27): ${lm || '–'}.`;
+});
+</script>
+</body>
+</html>
