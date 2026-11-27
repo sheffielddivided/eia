@@ -183,6 +183,10 @@
     table.om .tw::before { content: '▸'; display: inline-block; width: 0.9rem; color: #4f6ef7; transition: transform 0.15s; }
     table.om .tw.open::before { transform: rotate(90deg); }
     table.om .src { font-size: 0.62rem; color: #475569; margin-left: 0.35rem; font-weight: 500; text-transform: none; letter-spacing: 0; }
+    /* Δ vs. earlier STEO: forecast in the earlier release, history now; unchanged values muted. */
+    table.om td.nh { background: #2a2717; }
+    table.om tbody tr:hover td.nh { background: #33301c; }
+    table.om td.z { color: #4b5568 !important; }
     .om-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; padding: 0.7rem 1.25rem 0.9rem; font-size: 0.72rem; color: #64748b; border-top: 1px solid #2d3148; }
     .om-legend .sw { display: inline-block; width: 0.8rem; height: 0.8rem; border-radius: 2px; vertical-align: -2px; margin-right: 0.3rem; border: 1px solid #2d3148; }
     @media (max-width: 640px) {
@@ -382,7 +386,9 @@
       <div class="toggle-group" id="omModeGrp">
         <button data-val="level" class="active" onclick="activateBtn(this);renderOilMarket()">Level</button>
         <button data-val="yoy"   onclick="activateBtn(this);renderOilMarket()">Δ y/y</button>
+        <button data-val="rev"   onclick="activateBtn(this);renderOilMarket()">Δ vs. earlier STEO</button>
       </div>
+      <select id="omRefSel" style="display:none" onchange="renderOilMarket()" aria-label="Compare with STEO release" title="Earlier STEO release to compare with"></select>
       <div class="spacer"></div>
       <div class="toggle-group">
         <button onclick="omExpandAll(true)">Expand all</button>
@@ -404,6 +410,7 @@
       </div>
       <div class="om-legend">
         <span><span class="sw" style="background:#1f2333"></span>Forecast (shaded, italic)</span>
+        <span id="omRevLegend" style="display:none"></span>
         <span>Production &amp; consumption in million b/d · inventories in million barrels (end of period)</span>
         <span>Market balance = production − consumption (positive = implied stock build)</span>
         <span>OPEC country detail is published for historical months only</span>
@@ -1117,6 +1124,45 @@ const omOpen = new Set();
 let omData = null;
 let omLastView = null;
 
+// Earlier STEO releases for "Δ vs. earlier STEO": data/eia/steo_vintages.json
+// (scripts/fetch-steo-vintages.py, from EIA's archive of STEO workbooks). Each
+// series is stored as [first period, values]; omRef expands the selected release
+// the first time it is used. Loaded only when the mode is selected.
+let omVint;                 // undefined = not loaded, false = failed
+let omVintLoading = null;
+const OM_MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const omRelLabel = rel => `${OM_MON[+rel.slice(5, 7) - 1]} ${rel.slice(0, 4)}`;
+function omNextPeriod(p) {
+  if (p.length === 4) return String(+p + 1);
+  const y = +p.slice(0, 4);
+  if (p[5] === 'Q') { const q = +p.slice(-1); return q === 4 ? `${y + 1}-Q1` : `${y}-Q${q + 1}`; }
+  const m = +p.slice(5, 7);
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
+}
+// Releases before the current one, newest first.
+const omVintList = () => omVint ? omVint.vintages.filter(v => v.release < omData.release) : [];
+function omRef(release) {
+  const list = omVintList();
+  if (!list.length) return null;
+  const v = list.find(x => x.release === release) || list[0];
+  if (!v._x) {
+    const data = {};
+    Object.entries(v.data).forEach(([freq, ser]) => {
+      data[freq] = {};
+      Object.entries(ser).forEach(([id, [p0, vals]]) => {
+        const o = data[freq][id] = {};
+        let p = p0;
+        vals.forEach(x => { if (x != null) o[p] = x; p = omNextPeriod(p); });
+      });
+    });
+    v._x = { release: v.release, lastHistMonth: v.lastHistMonth, data };
+  }
+  return v._x;
+}
+// Whether a column is forecast given the last historical month.
+const omIsFc = (c, lastHist) => c.freq === 'annual' ? `${c.p}-12` > lastHist
+  : c.freq === 'quarterly' ? `${c.p.slice(0, 4)}-${String(+c.p.slice(-1) * 3).padStart(2, '0')}` > lastHist : c.p > lastHist;
+
 async function loadOilMarket() {
   hideErr('om');
   if (!omData) {
@@ -1164,14 +1210,15 @@ function omPrevPeriod(col) {
   return `${+y - 1}-${rest}`;
 }
 
-function omValue(row, freq, p) {
-  const get = id => omData.data[freq]?.[id]?.[p];
+function omValue(row, freq, p, src = omData) {
+  const get = id => src.data[freq]?.[id]?.[p];
   const v = row.calc ? row.calc(get) : get(row.id);
   return v == null ? null : v;
 }
 
 function omFmt(v, dec, signed) {
   if (v == null) return '–';
+  if (Math.abs(v) < 0.5 * 10 ** -dec) v = 0;   // rounds to zero: no sign
   const s = v.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
   return signed && v > 0 ? '+' + s : s;
 }
@@ -1179,8 +1226,29 @@ function omFmt(v, dec, signed) {
 function renderOilMarket() {
   if (!omData) return;
   const freq = getActiveVal('omFreqGrp');
-  const yoy  = getActiveVal('omModeGrp') === 'yoy';
-  const cols = omColumns(freq, getActiveVal('omRangeGrp'));
+  const sel  = document.getElementById('omRefSel');
+  // Δ vs. earlier STEO: load the earlier releases first.
+  if (getActiveVal('omModeGrp') === 'rev' && omVint === undefined) {
+    omVintLoading = omVintLoading || loadLocal('data/eia/steo_vintages.json')
+      .then(d => { omVint = d && d.vintages && d.vintages.length ? d : false; });
+    omVintLoading.then(renderOilMarket);
+    return;
+  }
+  const R = getActiveVal('omModeGrp') === 'rev' ? omRef(sel.value) : null;
+  const mode = getActiveVal('omModeGrp') === 'rev' && !R ? 'level' : getActiveVal('omModeGrp');
+  const yoy = mode === 'yoy', rev = mode === 'rev', chg = mode !== 'level';
+  if (getActiveVal('omModeGrp') === 'rev' && !R) showErr('om', 'Earlier STEO releases (data/eia/steo_vintages.json) not available; showing levels.');
+  else hideErr('om');
+  sel.style.display = rev ? '' : 'none';
+  if (rev) sel.innerHTML = omVintList().map((v, i) =>
+    `<option value="${v.release}"${v.release === R.release ? ' selected' : ''}>vs. STEO ${omRelLabel(v.release)}${i ? '' : ' (previous)'}</option>`).join('');
+  let cols = omColumns(freq, getActiveVal('omRangeGrp'));
+  // Only periods the earlier release has figures for (archive releases start
+  // four years before the release year; older releases end earlier).
+  if (rev) {
+    const kept = cols.filter(c => omValue({ id: 'PAPR_WORLD' }, c.freq, c.p, R) != null);
+    if (kept.length) cols = kept;
+  }
   const tbl  = document.getElementById('omTable');
 
   // Header: year band + period labels
@@ -1192,7 +1260,7 @@ function renderOilMarket() {
   });
   let html = '<thead><tr class="yr"><th></th>' + yearSpans.map((s, i) =>
     `<th colspan="${s.n}" class="${s.ann ? 'ann' : (i ? 'ys' : '')}" style="text-align:center">${s.key}</th>`).join('') + '</tr>';
-  html += '<tr><th>' + (yoy ? 'Change vs. same period last year' : '') + '</th>' + cols.map((c, i) =>
+  html += '<tr><th>' + (yoy ? 'Change vs. same period last year' : rev ? `Change vs. STEO ${omRelLabel(R.release)}` : '') + '</th>' + cols.map((c, i) =>
     `<th class="${omColClass(cols, i)}">${c.label}</th>`).join('') + '</tr></thead><tbody>';
 
   OM_ROWS.forEach(r => {
@@ -1204,30 +1272,39 @@ function renderOilMarket() {
     }
     const cls = [r.kind === 'tot' ? 'tot' : '', r.lvl ? 'l' + r.lvl : '', r.hl ? 'hl' : '',
                  r.parent && !omIsVisible(r) ? 'hidden' : ''].filter(Boolean).join(' ');
-    const dec = yoy ? (r.fmt === 0 ? 0 : 2) : (r.fmt ?? 2);
-    const signed = yoy || r.signed;
+    const dec = chg ? (r.fmt === 0 ? 0 : 2) : (r.fmt ?? 2);
+    const signed = chg || r.signed;
     const label = r.tw
       ? `<span class="tw${omOpen.has(r.tw) ? ' open' : ''}" onclick="omToggle('${r.tw}')">${r.label}</span>`
       : r.label;
     html += `<tr class="${cls}" data-parent="${r.parent || ''}"><td title="${r.id ? (omData.meta[r.id]?.name || r.label) + ' (' + r.id + ')' : r.label}">${label}</td>`;
     cols.forEach((c, i) => {
       let v = omValue(r, c.freq, c.p);
-      if (yoy && v != null) { const pv = omValue(r, c.freq, omPrevPeriod(c)); v = pv == null ? null : v - pv; }
+      if (chg && v != null) {
+        const pv = rev ? omValue(r, c.freq, c.p, R) : omValue(r, c.freq, omPrevPeriod(c));
+        v = pv == null ? null : v - pv;
+      }
       const tone = (signed && v != null && Math.abs(v) >= (dec ? 0.005 : 0.5)) ? (v > 0 ? 'pos' : 'neg') : '';
-      html += `<td class="${[omColClass(cols, i), (r.hl || yoy) ? tone : ''].filter(Boolean).join(' ')}">${omFmt(v, dec, signed)}</td>`;
+      const nh = rev && !c.fc && omIsFc(c, R.lastHistMonth) ? 'nh' : '';
+      const z = rev && v != null && Math.abs(v) < 0.5 * 10 ** -dec ? 'z' : '';
+      html += `<td class="${[omColClass(cols, i), (r.hl || chg) ? tone : '', nh, z].filter(Boolean).join(' ')}">${omFmt(v, dec, signed)}</td>`;
     });
     html += '</tr>';
   });
   tbl.innerHTML = html + '</tbody>';
   // Long ranges: start scrolled to the right so the outlook years are in view.
-  const sc = tbl.parentElement, viewKey = freq + '|' + getActiveVal('omRangeGrp');
+  const sc = tbl.parentElement, viewKey = freq + '|' + getActiveVal('omRangeGrp') + '|' + (rev ? 'rev' : '');
   if (viewKey !== omLastView) { sc.scrollLeft = sc.scrollWidth; omLastView = viewKey; }
 
   const rel = new Date(omData.release + '-01T00:00:00');
   const relLabel = rel.toLocaleString('en', { month: 'long', year: 'numeric' });
   document.getElementById('omSub').textContent =
-    `STEO ${relLabel} · Table 3a enriched with Table 3c · history through ${omMonthLabel(omData.lastHistMonth)}`;
-  renderOmKpis();
+    `STEO ${relLabel}${rev ? ` minus STEO ${omRelLabel(R.release)}` : ''} · Table 3a enriched with Table 3c · history through ${omMonthLabel(omData.lastHistMonth)}`;
+  const lg = document.getElementById('omRevLegend');
+  lg.style.display = rev ? '' : 'none';
+  if (rev) lg.innerHTML = `<span class="sw" style="background:#2a2717"></span>Forecast in STEO ${omRelLabel(R.release)}, history now · ` +
+    `change = STEO ${omRelLabel(omData.release)} − STEO ${omRelLabel(R.release)} for the same period (positive = revised up; earlier releases from EIA's STEO archive)`;
+  renderOmKpis(rev ? R : null);
 }
 
 function omColClass(cols, i) {
@@ -1258,7 +1335,8 @@ function omExpandAll(open) {
   renderOilMarket();
 }
 
-function renderOmKpis() {
+// With R (Δ vs. earlier STEO): the same figures as revisions against release R.
+function renderOmKpis(R) {
   const lastHist = omData.lastHistMonth;
   const [ly, lm] = lastHist.split('-').map(Number);
   // Current quarter = the quarter after the last fully historical month
@@ -1266,8 +1344,29 @@ function renderOmKpis() {
   const qp = `${cy}-Q${cq}`, qpPrev = `${cy - 1}-Q${cq}`;
   const Q = (id, p) => omData.data.quarterly?.[id]?.[p];
   const A = (id, y) => omData.data.annual?.[id]?.[String(y)];
-  const sgn = (v, d = 2) => v == null ? '–' : (v > 0 ? '+' : '') + v.toFixed(d);
+  const sgn = (v, d = 2) => v == null || isNaN(v) ? '–' : (v > 0 ? '+' : '') + v.toFixed(d);
   const tone = v => v == null ? '' : v > 0 ? 'pos' : v < 0 ? 'neg' : '';
+  if (R) {
+    const k = X => {
+      const q = id => X.data.quarterly?.[id]?.[qp], a = (id, y) => X.data.annual?.[id]?.[String(y)];
+      const df = (x, y) => x == null || y == null ? null : x - y;
+      return { prod: q('PAPR_WORLD'), cons: q('PATC_WORLD'), bal: df(q('PAPR_WORLD'), q('PATC_WORLD')), opp: q('PAPR_OPECPLUS'),
+               stocks: q('PASC_OECD_T3'), dDem: df(a('PATC_WORLD', cy + 1), a('PATC_WORLD', cy)) };
+    };
+    const a = k(omData), b = k(R), rl = omRelLabel(R.release), ql = `Q${cq} ${cy}`;
+    const dd = key => a[key] == null || b[key] == null ? null : a[key] - b[key];
+    const num = (v, d = 2, sg) => v == null ? '–' : sg ? sgn(v, d) : v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+    const t = (label, key, unit, sub, d = 2, sg) => ({ label, val: sgn(dd(key), d), unit, cls: tone(dd(key)),
+      sub: `${sub} · ${num(a[key], d, sg)} vs. ${num(b[key], d, sg)} in ${rl}` });
+    const tiles = [
+      t('World production', 'prod', 'mb/d', ql), t('World consumption', 'cons', 'mb/d', ql),
+      t('Market balance', 'bal', 'mb/d', ql, 2, true), t('OPEC+ production', 'opp', 'mb/d', ql),
+      t('OECD comm. stocks', 'stocks', 'mb', `end ${ql}`, 0), t(`Demand growth ${cy + 1}`, 'dDem', 'mb/d', 'y/y', 2, true),
+    ];
+    document.getElementById('omKpis').innerHTML = tiles.map(x =>
+      `<div class="om-kpi"><div class="k-label">${x.label} · revision</div><div class="k-val ${x.cls || ''}">${x.val}<small>${x.unit}</small></div><div class="k-sub">${x.sub}</div></div>`).join('');
+    return;
+  }
 
   const prod = Q('PAPR_WORLD', qp), cons = Q('PATC_WORLD', qp);
   const bal = prod != null && cons != null ? prod - cons : null;
