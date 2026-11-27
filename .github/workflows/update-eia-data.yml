@@ -28,6 +28,14 @@ jobs:
           EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
         run: python scripts/fetch-steo.py
 
+      # Earlier STEO releases from EIA's archive (the API only serves the
+      # current one), for comparing the current outlook with earlier ones.
+      - name: Fetch earlier STEO releases (archive workbooks)
+        continue-on-error: true
+        run: |
+          pip install --quiet openpyxl
+          python scripts/fetch-steo-vintages.py
+
       - name: Commit if changed
         run: |
           git config user.name  "github-actions[bot]"
